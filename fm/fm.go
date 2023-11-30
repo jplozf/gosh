@@ -35,6 +35,8 @@ var (
 func SetFilesMenu() {
 	MnuFiles = MnuFiles.New("Actions", "files", ui.TblFiles)
 
+	MnuFiles.AddItem("mnuEdit", "Edit", DoDelete, true)
+	MnuFiles.AddItem("mnuOpen", "Open", DoDelete, true)
 	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, true)
 	MnuFiles.AddItem("mnuRename", "Rename", DoRename, true)
 	MnuFiles.AddItem("mnuCreateFile", "Create File", DoCreateFile, true)
@@ -56,8 +58,15 @@ func ShowMenu() {
 	idx, _ := ui.TblFiles.GetSelection()
 	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
 	// fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	if targetType == "FOLDER" {
+		MnuFiles.SetEnabled("mnuEdit", false)
+		MnuFiles.SetEnabled("mnuOpen", false)
+		MnuFiles.SetEnabled("mnuEncrypt", false)
+	}
 	if targetType == "FILE" {
-		MnuFiles.SetEnabled("mnuZip", false)
+		MnuFiles.SetEnabled("mnuEdit", true)
+		MnuFiles.SetEnabled("mnuOpen", true)
+		MnuFiles.SetEnabled("mnuEncrypt", true)
 	}
 	if Hidden {
 		MnuFiles.SetLabel("mnuShowHiddenFiles", "Hide hidden files")
