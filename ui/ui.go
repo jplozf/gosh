@@ -11,8 +11,10 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"gosh/conf"
+	"gosh/editor"
 	"sort"
 	"strings"
 	"time"
@@ -44,6 +46,7 @@ var (
 	FlxFiles     *tview.Flex
 	FlxProcess   *tview.Flex
 	FlxHelp      *tview.Flex
+	FlxEditor    *tview.Flex
 	TxtPrompt    *tview.TextArea
 	TxtConsole   *tview.TextView
 	TxtFileInfo  *tview.TextView
@@ -60,15 +63,17 @@ var (
 	TxtPath      *tview.TextView
 	TxtProcess   *tview.TextView
 	FrmFileInfo  *tview.TextView
-	FrmProcInfo  *tview.TextView
+	TblProcUsers *tview.Table
 	TxtSelection *tview.TextView
+	StdoutBuf    bytes.Buffer
+	EdtMain      *editor.Editor
 )
 
 // ****************************************************************************
 // setUI()
 // setUI defines the user interface's fields
 // ****************************************************************************
-func SetUI(fQuit Fn) {
+func SetUI(fQuit Fn, hostname string) {
 	PgsApp = tview.NewPages()
 
 	lblDate = tview.NewTextView().SetText(currentDateString())
@@ -124,6 +129,8 @@ func SetUI(fQuit Fn) {
 	TxtFileInfo.SetBorder(true)
 	TxtFileInfo.SetDynamicColors(true)
 	TxtFileInfo.SetTitle("Preview")
+	TxtFileInfo.SetWrap(false)
+	TxtFileInfo.SetScrollable(true)
 
 	TxtSelection = tview.NewTextView()
 	TxtSelection.SetBorder(true)
@@ -138,15 +145,15 @@ func SetUI(fQuit Fn) {
 	TxtPath.Clear()
 	TxtPath.SetBorder(true)
 
-	FrmProcInfo = tview.NewTextView()
-	FrmProcInfo.SetBorder(true)
-	FrmProcInfo.SetDynamicColors(true)
-	FrmProcInfo.SetTitle("Infos")
+	TblProcUsers = tview.NewTable()
+	TblProcUsers.SetBorder(true)
+	TblProcUsers.SetTitle("Users")
+	TblProcUsers.SetSelectable(true, false)
 
 	TxtProcInfo = tview.NewTextView().Clear()
 	TxtProcInfo.SetBorder(true)
 	TxtProcInfo.SetDynamicColors(true)
-	TxtProcInfo.SetTitle("Preview")
+	TxtProcInfo.SetTitle("Details")
 
 	TblProcess = tview.NewTable()
 	TblProcess.SetBorder(true)
@@ -156,6 +163,14 @@ func SetUI(fQuit Fn) {
 	TxtProcess.Clear()
 	TxtProcess.SetBorder(true)
 
+	EdtMain = editor.NewEditor()
+	EdtMain.Clear()
+	EdtMain.SetDynamicColors(true)
+	EdtMain.SetBorder(true)
+
+	//*************************************************************************
+	// Main Layout (Shell)
+	//*************************************************************************
 	FlxMain = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().
 			AddItem(lblDate, 10, 0, false).
@@ -165,10 +180,13 @@ func SetUI(fQuit Fn) {
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
-			AddItem(LblHostname, 10, 0, false).
+			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
+	//*************************************************************************
+	// Help Layout
+	//*************************************************************************
 	FlxHelp = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().
 			AddItem(lblDate, 10, 0, false).
@@ -178,10 +196,13 @@ func SetUI(fQuit Fn) {
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
-			AddItem(LblHostname, 10, 0, false).
+			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
+	//*************************************************************************
+	// Files Layout
+	//*************************************************************************
 	FlxFiles = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().
 			AddItem(lblDate, 10, 0, false).
@@ -198,10 +219,13 @@ func SetUI(fQuit Fn) {
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
-			AddItem(LblHostname, 10, 0, false).
+			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
+	//*************************************************************************
+	// Process Layout
+	//*************************************************************************
 	FlxProcess = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().
 			AddItem(lblDate, 10, 0, false).
@@ -212,13 +236,34 @@ func SetUI(fQuit Fn) {
 				AddItem(TxtProcess, 3, 0, false).
 				AddItem(TblProcess, 0, 1, true), 0, 2, true).
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-				AddItem(FrmProcInfo, 9, 0, false).
-				AddItem(TxtProcInfo, 0, 1, false).
-				AddItem(TxtSelection, 5, 0, false), 0, 1, false), 0, 1, false).
+				AddItem(TblProcUsers, 12, 0, false).
+				AddItem(TxtProcInfo, 0, 1, false), 0, 1, false), 0, 1, false).
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
-			AddItem(LblHostname, 10, 0, false).
+			AddItem(LblHostname, len(hostname)+3, 0, false).
+			AddItem(lblStatus, 0, 1, false).
+			AddItem(LblRC, 5, 0, false), 1, 0, false)
+
+	//*************************************************************************
+	// Editor Layout
+	//*************************************************************************
+	FlxEditor = tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(tview.NewFlex().
+			AddItem(lblDate, 10, 0, false).
+			AddItem(lblTitle, 0, 1, false).
+			AddItem(lblTime, 8, 0, false), 1, 0, false).
+		AddItem(tview.NewFlex().
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TxtProcess, 3, 0, false).
+				AddItem(EdtMain, 0, 1, true), 0, 2, true).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TblProcUsers, 12, 0, false).
+				AddItem(TxtProcInfo, 0, 1, false), 0, 1, false), 0, 1, false).
+		AddItem(LblKeys, 2, 1, false).
+		AddItem(TxtPrompt, 2, 1, true).
+		AddItem(tview.NewFlex().
+			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
@@ -249,6 +294,7 @@ func SetUI(fQuit Fn) {
 	PgsApp.AddPage("help", FlxHelp, true, false)
 	PgsApp.AddPage("files", FlxFiles, true, false)
 	PgsApp.AddPage("process", FlxProcess, true, false)
+	PgsApp.AddPage("editor", FlxEditor, true, false)
 	PgsApp.AddPage("dlgQuit", dlgQuit, false, false)
 }
 
@@ -280,6 +326,9 @@ func UpdateTime() {
 		App.QueueUpdateDraw(func() {
 			lblDate.SetText(currentDateString())
 			lblTime.SetText(currentTimeString())
+			TxtConsole.SetText(TxtConsole.GetText(false) + string(StdoutBuf.Bytes()))
+			StdoutBuf.Reset()
+			// TxtConsole.SetText(string(StderrBuf.Bytes()))
 		})
 	}
 }
@@ -316,9 +365,18 @@ func SetStatus(t string) {
 // ****************************************************************************
 // outConsole()
 // ****************************************************************************
-func OutConsole(cmd string, out string) {
-	TxtConsole.SetText(TxtConsole.GetText(false) + "[red]⯈ " + cmd + ":[white]\n" + out + "\n")
+func HeaderConsole(cmd string) {
+	TxtConsole.SetText(TxtConsole.GetText(false) + "\n[red]⯈ " + cmd + ":\n[white]")
 	TxtConsole.ScrollToEnd()
+}
+
+// ****************************************************************************
+// outConsole()
+// ****************************************************************************
+func OutConsole(out string) {
+	TxtConsole.SetText(TxtConsole.GetText(false) + "[white]" + out + "\n")
+	TxtConsole.ScrollToEnd()
+	App.Sync()
 }
 
 // ****************************************************************************
@@ -345,7 +403,7 @@ func DisplayMap(tv *tview.TextView, m map[string]string) {
 	// iterate by sorted keys
 	for _, field := range fields {
 		// fmt.Println(i+1, firstName, designedBy[firstName])
-		out = out + "[red]" + field[1:] + strings.Repeat(" ", maxi-len(field)) + "[white]  " + m[field] + "\n"
+		out = out + "[red]" + field[2:] + strings.Repeat(" ", maxi-len(field)) + "[white]  " + m[field] + "\n"
 	}
 	/*
 		for key, value := range m {

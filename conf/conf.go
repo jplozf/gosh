@@ -10,6 +10,8 @@
 // ****************************************************************************
 package conf
 
+import "github.com/gdamore/tcell/v2"
+
 const (
 	STATUS_MESSAGE_DURATION = 3
 	APP_NAME                = "Gosh"
@@ -20,4 +22,8 @@ const (
 	APP_FOLDER              = ".gosh"
 	FILE_MAX_PREVIEW        = 1024
 	HASH_THRESHOLD_SIZE     = 1_073_741_824.0
+	COLOR_FOLDER            = tcell.ColorLightGreen
+	COLOR_FILE              = tcell.ColorYellow
+	COLOR_EXECUTABLE        = tcell.ColorLightYellow
+	COLOR_SELECTED          = tcell.ColorRed
 )

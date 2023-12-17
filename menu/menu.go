@@ -15,7 +15,6 @@ package menu
 // ****************************************************************************
 import (
 	"gosh/ui"
-	"log"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -27,29 +26,28 @@ import (
 type MenuItem struct {
 	Name    string
 	Label   string
-	Event   func()
+	Done    func()
 	Enabled bool
 }
 
 type Menu struct {
 	*tview.Table
-	title    string
-	items    []MenuItem
-	preamble func()
-	parent   string
-	focus    tview.Primitive
-	width    int
-	height   int
+	title  string
+	items  []MenuItem
+	parent string
+	focus  tview.Primitive
+	width  int
+	height int
 }
 
 // ****************************************************************************
 // New() MenuItem
 // ****************************************************************************
-func (mi *MenuItem) New(name string, label string, event func(), enabled bool) *MenuItem {
+func (mi *MenuItem) New(name string, label string, done func(), enabled bool) *MenuItem {
 	mi = &MenuItem{
 		Name:    name,
 		Label:   label,
-		Event:   event,
+		Done:    done,
 		Enabled: enabled,
 	}
 	return mi
@@ -73,10 +71,8 @@ func (m *Menu) New(title string, parent string, focus tview.Primitive) *Menu {
 // ****************************************************************************
 func (m *Menu) AddItem(name string, label string, event func(), enabled bool) {
 	var item *MenuItem
-	log.Println("Name : " + name)
 	item = item.New(name, label, event, enabled)
 	m.items = append(m.items, *item)
-	log.Println("Name2 : " + item.Name)
 }
 
 // ****************************************************************************
@@ -138,7 +134,7 @@ func (m *Menu) Popup() tview.Primitive {
 		case tcell.KeyEnter:
 			idx, _ := m.Table.GetSelection()
 			if m.items[idx].Enabled {
-				m.items[idx].Event()
+				m.items[idx].Done()
 				ui.PgsApp.SwitchToPage(m.parent)
 				ui.App.SetFocus(m.focus)
 			}

@@ -14,16 +14,18 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"gosh/conf"
 	"gosh/fm"
+	"gosh/pm"
 	"gosh/ui"
 	"gosh/utils"
 
@@ -31,17 +33,13 @@ import (
 	"github.com/rivo/tview"
 )
 
-type selecao struct {
-	fName string
-	fSize int64
-	fType string
-}
-
 var (
-	appDir string
-	aCmd   []string
-	iCmd   int
-	sel    []selecao
+	appDir      string
+	aCmd        []string
+	iCmd        int
+	currentUser string
+	hostname    string
+	greeting    string
 )
 
 // ****************************************************************************
@@ -54,10 +52,21 @@ func init() {
 	}
 
 	log.SetOutput(file)
+	hostname, err = os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+
+	user, err := user.Current()
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	currentUser = user.Username
+	greeting = currentUser + "@" + hostname + ":"
 
 	iCmd = 0
 	ui.App = tview.NewApplication()
-	ui.SetUI(appQuit)
+	ui.SetUI(appQuit, greeting)
 
 	userDir, err := os.UserHomeDir()
 	if err != nil {
@@ -91,6 +100,8 @@ func main() {
 			switchToFiles()
 		case tcell.KeyF4:
 			switchToProcess()
+		case tcell.KeyF6:
+			switchToEditor()
 		case tcell.KeyF12:
 			ui.PgsApp.ShowPage("dlgQuit")
 		case tcell.KeyCtrlC:
@@ -103,20 +114,89 @@ func main() {
 	ui.TblFiles.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
-			proceedFileAction()
+			fm.ProceedFileAction()
 			return nil
+		case tcell.KeyF5:
+			fm.RefreshMe()
 		case tcell.KeyF8:
 			fm.ShowMenu()
 			return nil
+		case tcell.KeyCtrlS:
+			fm.ShowMenuSort()
+			return nil
 		case tcell.KeyInsert:
-			proceedFileSelect()
+			fm.ProceedFileSelect()
 			return nil
 		case tcell.KeyTab:
 			if ui.TxtPrompt.HasFocus() {
 				ui.App.SetFocus(ui.TblFiles)
 			} else {
-				ui.App.SetFocus(ui.TxtPrompt)
+				ui.App.SetFocus(ui.TxtFileInfo)
 			}
+			return nil
+		}
+		return event
+	})
+
+	// Process panel keyboard's events manager
+	ui.TblProcess.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			pm.ProceedProcessAction()
+			return nil
+		case tcell.KeyF5:
+			pm.RefreshMe()
+		case tcell.KeyF8:
+			pm.ShowMenu()
+			return nil
+		case tcell.KeyCtrlS:
+			pm.ShowMenuSort()
+			return nil
+		case tcell.KeyTab:
+			if ui.TxtPrompt.HasFocus() {
+				ui.App.SetFocus(ui.TblProcess)
+				return nil
+			}
+			if ui.TblProcess.HasFocus() {
+				ui.App.SetFocus(ui.TblProcUsers)
+				return nil
+			}
+			if ui.TblProcUsers.HasFocus() {
+				ui.App.SetFocus(ui.TxtPrompt)
+				return nil
+			}
+		}
+		return event
+	})
+
+	// TblProcUsers panel keyboard's events manager
+	ui.TblProcUsers.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			idx, _ := ui.TblProcUsers.GetSelection()
+			pm.ShowProcesses(ui.TblProcUsers.GetCell(idx, 1).Text)
+			ui.App.Sync()
+			ui.App.SetFocus(ui.TblProcess)
+			return nil
+		/*
+			case tcell.KeyF8:
+				fm.ShowMenu()
+				return nil
+		*/
+		case tcell.KeyTab:
+			if ui.TblProcUsers.HasFocus() {
+				ui.App.SetFocus(ui.TxtPrompt)
+				return nil
+			}
+		}
+		return event
+	})
+
+	// FileInfo keyboard's events manager
+	ui.TxtFileInfo.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTAB:
+			ui.App.SetFocus(ui.TxtPrompt)
 			return nil
 		}
 		return event
@@ -127,7 +207,7 @@ func main() {
 		switch event.Key() {
 		case tcell.KeyEnter:
 			if ui.TxtPrompt.GetText() != "" {
-				// TODO : Manage the case we are in Files mode
+				// TODO : Manage the case we are not in Shell mode
 				xeq(ui.TxtPrompt.GetText())
 			}
 			return nil
@@ -160,6 +240,9 @@ func main() {
 			if ui.CurrentMode == ui.ModeShell {
 				ui.App.SetFocus(ui.TxtConsole)
 			}
+			if ui.CurrentMode == ui.ModeProcess {
+				ui.App.SetFocus(ui.TblProcess)
+			}
 			return nil
 		}
 		return event
@@ -179,7 +262,7 @@ func main() {
 	ui.SetTitle(conf.APP_STRING)
 	ui.SetStatus("Welcome.")
 	switchToShell()
-	ui.OutConsole(welcome())
+	welcome()
 
 	go ui.UpdateTime()
 	go utils.GetCpuUsage()
@@ -202,10 +285,11 @@ func appQuit() {
 // xeq()
 // ****************************************************************************
 func xeq(c string) {
-	cmd := strings.Fields(c)
+	// c = " bash -c " + c
+	sCmd := strings.Fields(c)
 	aCmd = append(aCmd, c)
 	iCmd++
-	switch cmd[0] {
+	switch sCmd[0] {
 	case "cls":
 		ui.TxtConsole.SetText("")
 	case "quit":
@@ -216,14 +300,18 @@ func xeq(c string) {
 		switchToFiles()
 	case "process":
 		switchToProcess()
+	case "editor":
+		switchToEditor()
 	default:
 		switchToShell()
 		ui.SetStatus("Running [" + c + "]")
-		out, err := exec.Command(cmd[0], cmd[1:]...).Output()
+		ui.HeaderConsole(c)
+
+		xCmd := exec.Command(sCmd[0], sCmd[1:]...)
+		xCmd.Stdout = io.MultiWriter(&ui.StdoutBuf) // ui.StdoutBuf is displayed through the ui.UpdateTime go routine
+		err := xCmd.Run()
 		if err != nil {
-			ui.OutConsole(c, string(err.Error())+"\n")
-		} else {
-			ui.OutConsole(c, string(out))
+			log.Fatalf("cmd.Run() failed with %s\n", err)
 		}
 	}
 	ui.TxtPrompt.SetText("", false)
@@ -267,7 +355,7 @@ func saveSettings() {
 // ****************************************************************************
 func switchToHelp() {
 	ui.SetTitle("Help")
-	ui.LblKeys.SetText("F2=Shell F3=Files F4=Process F12=Exit")
+	ui.LblKeys.SetText("F2=Shell F3=Files F4=Process F6=Editor F12=Exit")
 	ui.PgsApp.SwitchToPage("help")
 }
 
@@ -277,8 +365,18 @@ func switchToHelp() {
 func switchToShell() {
 	ui.CurrentMode = ui.ModeShell
 	ui.SetTitle("Shell")
-	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
+	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F6=Editor F12=Exit")
 	ui.PgsApp.SwitchToPage("main")
+}
+
+// ****************************************************************************
+// switchToShell()
+// ****************************************************************************
+func switchToEditor() {
+	ui.CurrentMode = ui.ModeTextEdit
+	ui.SetTitle("Editor")
+	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F12=Exit")
+	ui.PgsApp.SwitchToPage("editor")
 }
 
 // ****************************************************************************
@@ -288,60 +386,8 @@ func switchToFiles() {
 	ui.CurrentMode = ui.ModeFiles
 	fm.SetFilesMenu()
 	ui.SetTitle("Files")
-	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F8=Actions F12=Exit\nIns=Select Ctrl+C=Copy Ctrl+V=Paste")
-	sel = nil
-	ui.TxtSelection.Clear()
-	ui.PgsApp.SwitchToPage("files")
-	files, err := os.ReadDir(fm.Cwd)
-	if err != nil {
-		ui.SetStatus(err.Error())
-	}
-
-	ui.TblFiles.Clear()
-	ui.TxtFileInfo.Clear()
-	iStart := 0
-	if fm.Cwd != "/" {
-		ui.TblFiles.SetCell(0, 0, tview.NewTableCell("   "))
-		ui.TblFiles.SetCell(0, 1, tview.NewTableCell("..").SetTextColor(tcell.ColorYellow))
-		ui.TblFiles.SetCell(0, 2, tview.NewTableCell("<UP>"))
-		ui.TblFiles.SetCell(0, 3, tview.NewTableCell(" "))
-		ui.TblFiles.SetCell(0, 4, tview.NewTableCell(" "))
-		ui.TblFiles.SetCell(0, 5, tview.NewTableCell(" "))
-		ui.TblFiles.SetCell(0, 6, tview.NewTableCell(" "))
-		iStart = 1
-	}
-	ui.TxtPath.SetText(fm.Cwd)
-	for i, file := range files {
-		if !fm.Hidden && file.Name()[0] == '.' {
-			continue
-		}
-		ui.TblFiles.SetCell(i+iStart, 0, tview.NewTableCell("   "))
-		ui.TblFiles.SetCell(i+iStart, 1, tview.NewTableCell(file.Name()).SetTextColor(tcell.ColorYellow))
-		fi, err := file.Info()
-		if err == nil {
-			ui.TblFiles.SetCell(i+iStart, 2, tview.NewTableCell(fi.ModTime().String()[0:19]))
-			if fi.IsDir() {
-				ui.TblFiles.SetCell(i+iStart, 3, tview.NewTableCell("  FOLDER"))
-				ui.TblFiles.SetCell(0, 6, tview.NewTableCell(" "))
-			} else {
-				if fi.Mode().String()[0] == 'L' {
-					ui.TblFiles.SetCell(i+iStart, 3, tview.NewTableCell("  LINK"))
-					lnk, err := os.Readlink(filepath.Join(fm.Cwd, ui.TblFiles.GetCell(i+iStart, 1).Text))
-					if err == nil {
-						ui.TblFiles.SetCell(i+iStart, 6, tview.NewTableCell(lnk))
-					} else {
-						ui.TblFiles.SetCell(i+iStart, 6, tview.NewTableCell(err.Error()))
-					}
-				} else {
-					ui.TblFiles.SetCell(i+iStart, 3, tview.NewTableCell("  FILE"))
-					ui.TblFiles.SetCell(0, 6, tview.NewTableCell(" "))
-				}
-			}
-			ui.TblFiles.SetCell(i+iStart, 4, tview.NewTableCell(fi.Mode().String()))
-			ui.TblFiles.SetCell(i+iStart, 5, tview.NewTableCell(strconv.FormatInt(fi.Size(), 10)).SetAlign(tview.AlignRight))
-		}
-	}
-	ui.TblFiles.Select(0, 0)
+	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+C=Copy Ctrl+V=Paste")
+	fm.ShowFiles()
 	ui.App.Sync()
 	ui.App.SetFocus(ui.TblFiles)
 }
@@ -351,206 +397,20 @@ func switchToFiles() {
 // ****************************************************************************
 func switchToProcess() {
 	ui.CurrentMode = ui.ModeProcess
+	pm.SetProcessMenu()
 	ui.SetTitle("Process")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F12=Exit")
-	sel = nil
-	ui.TxtSelection.Clear()
-	ui.PgsApp.SwitchToPage("process")
-	ui.TxtProcess.SetText(fmt.Sprintf("CPU usage is %.2f%%\n", utils.CpuUsage))
-}
-
-// ****************************************************************************
-// proceedFileAction()
-// ****************************************************************************
-func proceedFileAction() {
-	idx, _ := ui.TblFiles.GetSelection()
-	// TODO : manage LINK
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	if targetType == "LINK" {
-		targetType = "FILE"
-		fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-		fFile, err := os.Readlink(fName)
-		if err == nil {
-			info, err := os.Stat(fFile)
-			if err == nil {
-				if info.IsDir() {
-					targetType = "FOLDER"
-				}
-			} else {
-				ui.SetStatus(err.Error())
-			}
-		} else {
-			ui.SetStatus(err.Error())
-		}
-	}
-	if targetType == "FILE" { // or type(readlink)==file
-		fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-		ui.FrmFileInfo.Clear()
-
-		size, _ := strconv.ParseFloat(ui.TblFiles.GetCell(idx, 5).Text, 64)
-		if size <= conf.HASH_THRESHOLD_SIZE {
-			infos := map[string]string{
-				"0Name":        ui.TblFiles.GetCell(idx, 1).Text,
-				"1Change Date": ui.TblFiles.GetCell(idx, 2).Text,
-				"2Access":      ui.TblFiles.GetCell(idx, 4).Text,
-				"3Size":        ui.TblFiles.GetCell(idx, 5).Text + " Bytes (" + utils.HumanFileSize(size) + ")",
-				"4Mime Type":   utils.GetMimeType(fName),
-			}
-			ui.DisplayMap(ui.FrmFileInfo, infos)
-
-			f, err := os.OpenFile(fName, os.O_RDONLY, os.ModePerm)
-			if err != nil {
-				ui.SetStatus(err.Error())
-			}
-			defer f.Close()
-
-			ui.TxtFileInfo.Clear()
-			if utils.IsTextFile(fName) {
-				reader := bufio.NewReader(f)
-				characters := make([]byte, conf.FILE_MAX_PREVIEW)
-				_, err := reader.Read(characters)
-				if err != nil {
-					ui.SetStatus(err.Error())
-				} else {
-					ui.TxtFileInfo.SetText(string(characters) + "\n")
-				}
-			} else {
-				sha, err := utils.GetSha256(fName)
-				if err != nil {
-					ui.SetStatus(err.Error())
-				} else {
-					ui.TxtFileInfo.SetText("SHA256 : \n" + sha[0:31] + "\n" + sha[32:63])
-				}
-			}
-		} else {
-			infos := map[string]string{
-				"0Name":        ui.TblFiles.GetCell(idx, 1).Text,
-				"1Change Date": ui.TblFiles.GetCell(idx, 2).Text,
-				"2Access":      ui.TblFiles.GetCell(idx, 4).Text,
-				"3Size":        ui.TblFiles.GetCell(idx, 5).Text + " Bytes (" + utils.HumanFileSize(size) + ")",
-			}
-			ui.DisplayMap(ui.FrmFileInfo, infos)
-			ui.TxtFileInfo.SetText("VERY BIG FILE, can't display a preview.")
-		}
-	} else { //  or type(readlink)==folder
-		fm.Cwd = filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-		ui.FrmFileInfo.Clear()
-		nFiles, nFolders, err := utils.NumberOfFilesAndFolders(fm.Cwd)
-		if err != nil {
-			ui.SetStatus(err.Error())
-		}
-		infos := map[string]string{
-			"0Name":    fm.Cwd,
-			"1Files":   strconv.Itoa(nFiles),
-			"2Folders": strconv.Itoa(nFolders),
-		}
-		ui.DisplayMap(ui.FrmFileInfo, infos)
-		switchToFiles()
-	}
+	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+F=Find Ctrl+S=Sort")
+	pm.ShowProcesses(currentUser)
 	ui.App.Sync()
-}
-
-// ****************************************************************************
-// proceedFileSelect()
-// ****************************************************************************
-func proceedFileSelect() {
-	idx, _ := ui.TblFiles.GetSelection()
-	if strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text) == "FILE" {
-		if ui.TblFiles.GetCell(idx, 0).Text == "   " {
-			// SELECT FILE
-			fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-			fSize, _ := strconv.Atoi(ui.TblFiles.GetCell(idx, 5).Text)
-			ui.SetStatus(fName)
-			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
-			ui.TblFiles.GetCell(idx, 0).SetTextColor(tcell.ColorRed)
-			ui.TblFiles.GetCell(idx, 1).SetTextColor(tcell.ColorRed)
-			sel = append(sel, selecao{fName: fName, fSize: int64(fSize), fType: "FILE"})
-			displaySelection()
-		} else {
-			// UNSELECT FILE
-			fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-			ui.SetStatus(fName)
-			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
-			ui.TblFiles.GetCell(idx, 0).SetTextColor(tcell.ColorYellow)
-			ui.TblFiles.GetCell(idx, 1).SetTextColor(tcell.ColorYellow)
-			sel = findAndDelete(sel, selecao{fName: fName, fSize: 0, fType: "FILE"})
-			displaySelection()
-		}
-	} else {
-		if ui.TblFiles.GetCell(idx, 0).Text == "   " {
-			// SELECT FOLDER
-			fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-			fSize, _ := utils.DirSize(fName)
-			ui.SetStatus(fName)
-			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
-			ui.TblFiles.GetCell(idx, 0).SetTextColor(tcell.ColorRed)
-			ui.TblFiles.GetCell(idx, 1).SetTextColor(tcell.ColorRed)
-			sel = append(sel, selecao{fName: fName, fSize: fSize, fType: "FOLDER"})
-			displaySelection()
-		} else {
-			// UNSELECT FOLDER
-			fName := filepath.Join(fm.Cwd, ui.TblFiles.GetCell(idx, 1).Text)
-			ui.SetStatus(fName)
-			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
-			ui.TblFiles.GetCell(idx, 0).SetTextColor(tcell.ColorYellow)
-			ui.TblFiles.GetCell(idx, 1).SetTextColor(tcell.ColorYellow)
-			sel = findAndDelete(sel, selecao{fName: fName, fSize: 0, fType: "FOLDER"})
-			displaySelection()
-		}
-	}
-	// Move cursor to next line
-	if idx < ui.TblFiles.GetRowCount()-1 {
-		ui.TblFiles.Select(idx+1, 0)
-	}
-}
-
-// ****************************************************************************
-// displaySelection()
-// ****************************************************************************
-func displaySelection() {
-	nFiles := 0
-	nFolders := 0
-	nSize := 0
-	for _, s := range sel {
-		nSize += int(s.fSize)
-		if s.fType == "FILE" {
-			nFiles++
-		} else {
-			nFolders++
-		}
-	}
-	infos := map[string]string{
-		"0Files":   fmt.Sprintf("%d", nFiles),
-		"1Folders": fmt.Sprintf("%d", nFolders),
-		"2Size":    fmt.Sprintf("%d Bytes (%s)", nSize, utils.HumanFileSize(float64(nSize))),
-	}
-	ui.DisplayMap(ui.TxtSelection, infos)
-}
-
-// ****************************************************************************
-// findAndDelete()
-// ****************************************************************************
-func findAndDelete(s []selecao, item selecao) []selecao {
-	index := 0
-	for _, i := range s {
-		if i.fName != item.fName {
-			s[index] = i
-			index++
-		}
-	}
-	return s[:index]
+	ui.App.SetFocus(ui.TblProcess)
 }
 
 // ****************************************************************************
 // welcome()
 // ****************************************************************************
-func welcome() (string, string) {
+func welcome() {
 	w1 := ":: Welcome to " + conf.APP_STRING + " :"
 	w2 := conf.APP_NAME + " version " + conf.APP_VERSION + " - " + conf.APP_URL + "\n"
-	hst, err := os.Hostname()
-	if err != nil {
-		hst = "localhost"
-	}
 	os := runtime.GOOS
 	if os == "windows" {
 		out, err := exec.Command("ver").Output()
@@ -564,8 +424,9 @@ func welcome() (string, string) {
 			w2 = w2 + string(out)
 		}
 	}
-	ui.LblHostname.SetText(hst)
-	return w1, w2
+	ui.LblHostname.SetText("👻" + greeting)
+	ui.HeaderConsole(w1)
+	ui.OutConsole(w2)
 }
 
 /*
