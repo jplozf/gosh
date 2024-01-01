@@ -1,0 +1,31 @@
+# 👻 Gosh
+
+* Shell
+* File Manager
+	* Zip
+	* Hash
+	* Encryption
+* Process Manager
+	* Services
+* Network
+    * Multi-Ping
+    * Whois
+    * Traceroute
+    * Open Ports
+	* nmap
+* Editor + Git
+* HexEditor
+* Crontab Manager
+* SQLite3 Manager
+* Users Manager
+* Updates Manager
+* Dashboard
+* Help
+* Log Viewer
+* Snippets
+* Bookmarks
+* Fast Web Server
+* Self Update
+* Sudo
+* restic
+* clamav

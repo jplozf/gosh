@@ -199,3 +199,10 @@ func DirSize(path string) (int64, error) {
 	})
 	return size, err
 }
+
+// ****************************************************************************
+// FilenameWithoutExtension()
+// ****************************************************************************
+func FilenameWithoutExtension(fileName string) string {
+	return strings.TrimSuffix(fileName, filepath.Ext(fileName))
+}

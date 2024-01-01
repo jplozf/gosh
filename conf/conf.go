@@ -10,7 +10,12 @@
 // ****************************************************************************
 package conf
 
-import "github.com/gdamore/tcell/v2"
+import (
+	"log"
+	"os"
+
+	"github.com/gdamore/tcell/v2"
+)
 
 const (
 	STATUS_MESSAGE_DURATION = 3
@@ -27,3 +32,16 @@ const (
 	COLOR_EXECUTABLE        = tcell.ColorLightYellow
 	COLOR_SELECTED          = tcell.ColorRed
 )
+
+var LogFile os.File
+
+// ****************************************************************************
+// SetLog()
+// ****************************************************************************
+func SetLog() {
+	LogFile, err := os.OpenFile("gosh.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(LogFile)
+}

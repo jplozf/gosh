@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"gosh/conf"
 	"gosh/editor"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -68,6 +69,13 @@ var (
 	StdoutBuf    bytes.Buffer
 	EdtMain      *editor.Editor
 )
+
+// ****************************************************************************
+// init()
+// ****************************************************************************
+func init() {
+	log.SetOutput(&conf.LogFile)
+}
 
 // ****************************************************************************
 // setUI()
@@ -360,10 +368,12 @@ func SetStatus(t string) {
 		lblStatus.SetText("")
 	}
 	time.AfterFunc(DurationOfTime, f)
+	// TODO : Send status string to log file
+	// log.Fatal(t)
 }
 
 // ****************************************************************************
-// outConsole()
+// HeaderConsole()
 // ****************************************************************************
 func HeaderConsole(cmd string) {
 	TxtConsole.SetText(TxtConsole.GetText(false) + "\n[red]⯈ " + cmd + ":\n[white]")

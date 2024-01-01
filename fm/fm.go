@@ -15,6 +15,7 @@ package fm
 // ****************************************************************************
 
 import (
+	"archive/zip"
 	"fmt"
 	"gosh/conf"
 	"gosh/dialog"
@@ -22,6 +23,7 @@ import (
 	"gosh/preview"
 	"gosh/ui"
 	"gosh/utils"
+	"io"
 	"io/fs"
 	"os"
 	"sort"
@@ -75,17 +77,17 @@ var (
 // ****************************************************************************
 func SetFilesMenu() {
 	MnuFiles = MnuFiles.New("Actions", "files", ui.TblFiles)
-	MnuFiles.AddItem("mnuEdit", "Edit", DoDelete, true)
-	MnuFiles.AddItem("mnuOpen", "Open", DoDelete, true)
+	// MnuFiles.AddItem("mnuEdit", "Edit", DoDelete, true)
+	// MnuFiles.AddItem("mnuOpen", "Open", DoDelete, true)
 	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, true)
 	MnuFiles.AddItem("mnuRename", "Rename", DoRename, true)
-	MnuFiles.AddItem("mnuMove", "Move", DoRename, true)
-	MnuFiles.AddItem("mnuCreateFile", "Create File", DoCreateFile, true)
-	MnuFiles.AddItem("mnuCreateFolder", "Create Folder", DoCreateFolder, true)
-	MnuFiles.AddItem("mnuCreateLink", "Create Link", DoCreateLink, true)
-	MnuFiles.AddItem("mnuZip", "Zip", DoDelete, true)
-	MnuFiles.AddItem("mnuHashes", "Get Hashes", DoDelete, true)
-	MnuFiles.AddItem("mnuEncrypt", "Encrypt", DoDelete, true)
+	// MnuFiles.AddItem("mnuMove", "Move", DoRename, true)
+	// MnuFiles.AddItem("mnuCreateFile", "Create File", DoCreateFile, true)
+	// MnuFiles.AddItem("mnuCreateFolder", "Create Folder", DoCreateFolder, true)
+	// MnuFiles.AddItem("mnuCreateLink", "Create Link", DoCreateLink, true)
+	MnuFiles.AddItem("mnuZip", "Zip", DoZip, true)
+	// MnuFiles.AddItem("mnuHashes", "Get Hashes", DoDelete, true)
+	// MnuFiles.AddItem("mnuEncrypt", "Encrypt", DoDelete, true)
 	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, true)
 	ui.PgsApp.AddPage("dlgFileAction", MnuFiles.Popup(), true, false)
 
@@ -137,35 +139,169 @@ func ShowMenuSort() {
 // ****************************************************************************
 func DoDelete() {
 	idx, _ := ui.TblFiles.GetSelection()
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	if targetType == "FILE" {
-		ui.SetStatus("Deleting file " + fName)
-		// DlgConfirm = DlgConfirm.New("Delete File", dialog.YesNo, "Are you sure ?", []string{"Yes", "No"}, ProcessDelete, "files", ui.TblFiles)
-		// ui.PgsApp.AddPage("dlgFileAction", DlgConfirm.Popup(), true, false)
+		DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete File %s", fName), // Title
+			"Are you sure you want to delete this file ?", // Message
+			DeleteFile,
+			idx,
+			"files", ui.TblFiles) // Focus return
+		ui.PgsApp.AddPage("dlgConfirmDeleteFile", DlgConfirm.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgConfirmDeleteFile")
 	} else {
-		ui.SetStatus("Deleting folder " + fName)
+		DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete Folder %s", fName), // Title
+			"Are you sure you want to delete this folder and all its content ?", // Message
+			DeleteFolder,
+			idx,
+			"files", ui.TblFiles) // Focus return
+		ui.PgsApp.AddPage("dlgConfirmDeleteFolder", DlgConfirm.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgConfirmDeleteFolder")
 	}
 }
 
-/*
-func ProcessDelete(bIndex int, bLabel string) {
-	ui.PgsApp.SwitchToPage(DlgConfirm.Parent)
-	ui.App.SetFocus(DlgConfirm.FFocus)
+// ****************************************************************************
+// DeleteFile()
+// ****************************************************************************
+func DeleteFile(button dialog.DlgButton, idx int) {
+	if button == dialog.BUTTON_YES {
+		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		err := os.Remove(fName)
+		if err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			ui.SetStatus("Deleting file " + fName)
+			RefreshMe()
+		}
+	}
+	if button == dialog.BUTTON_NO {
+		ui.SetStatus("Aborting deletion of file " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
+	if button == dialog.BUTTON_CANCEL {
+		ui.SetStatus("Cancelling deletion of file " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
 }
-*/
+
+// ****************************************************************************
+// DeleteFolder()
+// ****************************************************************************
+func DeleteFolder(button dialog.DlgButton, idx int) {
+	if button == dialog.BUTTON_YES {
+		ui.SetStatus("Deleting folder " + ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		err := os.RemoveAll(fName)
+		if err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			ui.SetStatus("Deleting folder " + fName)
+			RefreshMe()
+		}
+	}
+	if button == dialog.BUTTON_NO {
+		ui.SetStatus("Aborting deletion of folder " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
+	if button == dialog.BUTTON_CANCEL {
+		ui.SetStatus("Cancelling deletion of folder " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
+}
 
 // ****************************************************************************
 // DoRename()
 // ****************************************************************************
 func DoRename() {
 	idx, _ := ui.TblFiles.GetSelection()
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	if targetType == "FILE" {
-		ui.SetStatus("Renaming file " + fName)
+		DlgConfirm = DlgConfirm.Input(fmt.Sprintf("Rename File %s", fName), // Title
+			"Please, enter the new name :", // Message
+			RenameFile,
+			idx,
+			"files", ui.TblFiles) // Focus return
+		ui.PgsApp.AddPage("dlgConfirmRenameFile", DlgConfirm.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgConfirmRenameFile")
 	} else {
-		ui.SetStatus("Renaming folder " + fName)
+		DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Rename Folder %s", fName), // Title
+			"Please, enter the new name :", // Message
+			RenameFolder,
+			idx,
+			"files", ui.TblFiles) // Focus return
+		ui.PgsApp.AddPage("dlgConfirmRenameFolder", DlgConfirm.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgConfirmRenameFolder")
+	}
+}
+
+// ****************************************************************************
+// RenameFile()
+// ****************************************************************************
+func RenameFile(button dialog.DlgButton, idx int) {
+	if button == dialog.BUTTON_OK {
+		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		err := os.Rename(fName, filepath.Join(Cwd, DlgConfirm.Value))
+		if err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			ui.SetStatus("Renaming file " + fName)
+			RefreshMe()
+		}
+	}
+	if button == dialog.BUTTON_CANCEL {
+		ui.SetStatus("Cancelling renaming of file " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
+}
+
+// ****************************************************************************
+// RenameFolder()
+// ****************************************************************************
+func RenameFolder(button dialog.DlgButton, idx int) {
+	if button == dialog.BUTTON_OK {
+		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		err := os.Rename(fName, filepath.Join(Cwd, DlgConfirm.Value))
+		if err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			ui.SetStatus("Renaming folder " + fName)
+			RefreshMe()
+		}
+	}
+	if button == dialog.BUTTON_CANCEL {
+		ui.SetStatus("Cancelling renaming of folder " + ui.TblFiles.GetCell(idx, 2).Text)
+	}
+}
+
+// ****************************************************************************
+// DoZip()
+// ****************************************************************************
+func DoZip() {
+	idx, _ := ui.TblFiles.GetSelection()
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+	if targetType == "FILE" {
+		fArchive := utils.FilenameWithoutExtension(fName) + ".zip"
+		arc, err := os.Create(fArchive)
+		if err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			defer arc.Close()
+			zipWriter := zip.NewWriter(arc)
+			f1, err := os.Open(fName)
+			if err != nil {
+				ui.SetStatus(err.Error())
+			} else {
+				w1, err := zipWriter.Create(fName)
+				if err != nil {
+					ui.SetStatus(err.Error())
+				} else {
+					if _, err := io.Copy(w1, f1); err != nil {
+						ui.SetStatus(err.Error())
+					} else {
+						ui.SetStatus("File zipped successfully")
+						zipWriter.Close()
+						RefreshMe()
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -174,8 +310,8 @@ func DoRename() {
 // ****************************************************************************
 func DoCreateFile() {
 	idx, _ := ui.TblFiles.GetSelection()
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	if targetType == "FILE" {
 		ui.SetStatus("Renaming file " + fName)
 	} else {
@@ -188,8 +324,8 @@ func DoCreateFile() {
 // ****************************************************************************
 func DoCreateFolder() {
 	idx, _ := ui.TblFiles.GetSelection()
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	if targetType == "FILE" {
 		ui.SetStatus("Renaming file " + fName)
 	} else {
@@ -202,8 +338,8 @@ func DoCreateFolder() {
 // ****************************************************************************
 func DoCreateLink() {
 	idx, _ := ui.TblFiles.GetSelection()
-	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 3).Text)
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 1).Text)
+	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	if targetType == "FILE" {
 		ui.SetStatus("Creating link for file " + fName)
 	} else {
@@ -216,7 +352,7 @@ func DoCreateLink() {
 // ****************************************************************************
 func DoSwitchHiddenFiles() {
 	Hidden = !Hidden
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -391,7 +527,7 @@ func doSortNameA() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -406,7 +542,7 @@ func doSortNameD() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -421,7 +557,7 @@ func doSortSizeA() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -436,7 +572,7 @@ func doSortSizeD() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", false)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -451,7 +587,7 @@ func doSortTimeA() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", false)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -466,7 +602,7 @@ func doSortTimeD() {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", false)
-	ShowFiles()
+	RefreshMe()
 }
 
 // ****************************************************************************
@@ -639,20 +775,3 @@ func findAndDelete(s []selecao, item selecao) []selecao {
 	}
 	return s[:index]
 }
-
-/*
-Create Folder
-Create File from ~/Modèles
-Create Link
-Zip file/folder
-Delete file/folder
-Move file/folder
-Rename file/folder
-Hash file
-Encrypt file
-Sort by names/dates/size
-List hidden files
-
-Edit file
-Hexedit file
-*/

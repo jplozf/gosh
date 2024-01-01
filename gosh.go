@@ -40,18 +40,15 @@ var (
 	currentUser string
 	hostname    string
 	greeting    string
+	err         error
 )
 
 // ****************************************************************************
 // init()
 // ****************************************************************************
 func init() {
-	file, err := os.OpenFile("gosh.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.SetOutput(file)
+	conf.SetLog()
+	log.SetOutput(&conf.LogFile)
 	hostname, err = os.Hostname()
 	if err != nil {
 		hostname = "localhost"
@@ -278,7 +275,7 @@ func main() {
 func appQuit() {
 	saveSettings()
 	ui.App.Stop()
-	fmt.Println(conf.APP_STRING)
+	fmt.Println("👻" + conf.APP_STRING)
 }
 
 // ****************************************************************************
@@ -386,7 +383,7 @@ func switchToFiles() {
 	ui.CurrentMode = ui.ModeFiles
 	fm.SetFilesMenu()
 	ui.SetTitle("Files")
-	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+C=Copy Ctrl+V=Paste")
+	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+C=Copy Ctrl+V=Paste Ctrl+S=Sort")
 	fm.ShowFiles()
 	ui.App.Sync()
 	ui.App.SetFocus(ui.TblFiles)
@@ -428,43 +425,3 @@ func welcome() {
 	ui.HeaderConsole(w1)
 	ui.OutConsole(w2)
 }
-
-/*
-F1	Aide
-F2	Menu
-F3	Voir
-F4	Modif
-F5	Copier
-F6	RenDep
-F7	CréRep
-F8	Suppr
-F9	MenuDér
-F10	Quitter
-
-ps -eo pid,user,lstart,cmd
-ps -p <pid> -o lstart
-kill -STOP <pid> => pause
-kill -CONT <pid> => reprend
-
-Create Folder
-Create File from ~/Modèles
-Create Link
-Zip file/folder
-Delete file/folder
-Move file/folder
-Rename file/folder
-Hash file
-Encrypt file
-Sort by names/dates/size
-List hidden files
-
-Edit file
-Hexedit file
-
-List process
-Kill process
-Pause process
-Cont process
-Nice process
-
-*/

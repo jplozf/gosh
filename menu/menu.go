@@ -134,9 +134,9 @@ func (m *Menu) Popup() tview.Primitive {
 		case tcell.KeyEnter:
 			idx, _ := m.Table.GetSelection()
 			if m.items[idx].Enabled {
-				m.items[idx].Done()
 				ui.PgsApp.SwitchToPage(m.parent)
 				ui.App.SetFocus(m.focus)
+				m.items[idx].Done()
 			}
 			return nil
 		case tcell.KeyEsc:
