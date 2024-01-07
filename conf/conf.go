@@ -31,6 +31,7 @@ const (
 	COLOR_FILE              = tcell.ColorYellow
 	COLOR_EXECUTABLE        = tcell.ColorLightYellow
 	COLOR_SELECTED          = tcell.ColorRed
+	ICON_MODIFIED           = "●"
 )
 
 var LogFile os.File

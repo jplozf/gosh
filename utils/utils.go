@@ -11,12 +11,15 @@
 package utils
 
 import (
+	"archive/zip"
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -205,4 +208,225 @@ func DirSize(path string) (int64, error) {
 // ****************************************************************************
 func FilenameWithoutExtension(fileName string) string {
 	return strings.TrimSuffix(fileName, filepath.Ext(fileName))
+}
+
+// ****************************************************************************
+// GetAllFilesFromFolder()
+// ****************************************************************************
+func GetAllFilesFromFolder(folder string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		return files, err
+	}
+	return files, nil
+}
+
+// ****************************************************************************
+// ZipFile()
+// ****************************************************************************
+func ZipFile(fArchive string, fName string) {
+	arc, err := os.Create(fArchive)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		defer arc.Close()
+		zipWriter := zip.NewWriter(arc)
+		f1, err := os.Open(fName)
+		if err != nil {
+			log.Fatal(err)
+		} else {
+			w1, err := zipWriter.Create(filepath.Base(fName))
+			if err != nil {
+				log.Fatal(err)
+			} else {
+				if _, err := io.Copy(w1, f1); err != nil {
+					log.Fatal(err)
+				} else {
+					zipWriter.Close()
+				}
+			}
+		}
+	}
+}
+
+// ****************************************************************************
+// ZipFolder()
+// ****************************************************************************
+func ZipFolder(fArchive string, fName string) {
+	zipFile, err := os.Create(fArchive)
+	if err != nil {
+		log.Fatal(err)
+	}
+	zipWriter := zip.NewWriter(zipFile)
+	err = filepath.Walk(fName, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			log.Fatal(err)
+		}
+		if path == fName {
+			return nil
+		}
+		pathInZip := strings.Replace(path, strings.Replace(fName, "./", "", 1)+"/", "", 1)
+		if info.IsDir() {
+			_, err := zipWriter.Create(pathInZip + "/")
+			if err != nil {
+				log.Fatal(err)
+			}
+			return nil
+		}
+		zipFileWriter, err := zipWriter.Create(pathInZip)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fileDescriptor, err := os.Open(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = io.Copy(zipFileWriter, fileDescriptor)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = zipWriter.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = zipFile.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ****************************************************************************
+// GetFilenameWhichDoesntExist()
+// ****************************************************************************
+func GetFilenameWhichDoesntExist(fName string) string {
+	if IsFileExist(fName) {
+		f := fName
+		i := 1
+		for IsFileExist(f) {
+			f = FilenameWithoutExtension(fName) + fmt.Sprintf("(%d)", i) + filepath.Ext(fName)
+			i++
+		}
+		return f
+	} else {
+		return fName
+	}
+}
+
+// ****************************************************************************
+// IsFileExist()
+// ****************************************************************************
+func IsFileExist(fName string) bool {
+	if _, err := os.Stat(fName); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+// ****************************************************************************
+// CopyFile()
+// ****************************************************************************
+func CopyFile(source string, dest string) (err error) {
+	sourcefile, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+
+	defer sourcefile.Close()
+
+	destfile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+
+	defer destfile.Close()
+
+	_, err = io.Copy(destfile, sourcefile)
+	if err == nil {
+		sourceinfo, err := os.Stat(source)
+		if err != nil {
+			err = os.Chmod(dest, sourceinfo.Mode())
+		}
+
+	}
+
+	return
+}
+
+// ****************************************************************************
+// CopyDir()
+// ****************************************************************************
+func CopyDir(source string, dest string) (err error) {
+
+	// get properties of source dir
+	sourceinfo, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+
+	// create dest dir
+
+	err = os.MkdirAll(dest, sourceinfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	directory, _ := os.Open(source)
+
+	objects, err := directory.Readdir(-1)
+
+	for _, obj := range objects {
+
+		sourcefilepointer := source + "/" + obj.Name()
+
+		destinationfilepointer := dest + "/" + obj.Name()
+
+		if obj.IsDir() {
+			// create sub-directories - recursively
+			err = CopyDir(sourcefilepointer, destinationfilepointer)
+			if err != nil {
+				fmt.Println(err)
+			}
+		} else {
+			// perform copy
+			err = CopyFile(sourcefilepointer, destinationfilepointer)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+
+	}
+	return
+}
+
+// ****************************************************************************
+// CopyFileIntoFolder()
+// ****************************************************************************
+func CopyFileIntoFolder(source string, dest string) (err error) {
+	destFile := filepath.Join(dest, filepath.Base(source))
+	return CopyFile(source, destFile)
+}
+
+// ****************************************************************************
+// CopyFileIntoFolder()
+// ****************************************************************************
+func CopyFolderIntoFolder(source string, dest string) (err error) {
+	destFolder := filepath.Join(dest, filepath.Base(source))
+	return CopyDir(source, destFolder)
 }

@@ -14,13 +14,13 @@ import (
 	"bytes"
 	"fmt"
 	"gosh/conf"
-	"gosh/editor"
 	"log"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/pgavlin/femto"
 	"github.com/rivo/tview"
 )
 
@@ -67,7 +67,10 @@ var (
 	TblProcUsers *tview.Table
 	TxtSelection *tview.TextView
 	StdoutBuf    bytes.Buffer
-	EdtMain      *editor.Editor
+	EdtMain      *femto.View
+	TxtEditName  *tview.TextView
+	TblOpenFiles *tview.Table
+	TrvExplorer  *tview.TreeView
 )
 
 // ****************************************************************************
@@ -171,10 +174,19 @@ func SetUI(fQuit Fn, hostname string) {
 	TxtProcess.Clear()
 	TxtProcess.SetBorder(true)
 
-	EdtMain = editor.NewEditor()
-	EdtMain.Clear()
-	EdtMain.SetDynamicColors(true)
+	buffer := femto.NewBufferFromString(string("content"), "./dummy")
+	EdtMain = femto.NewView(buffer)
 	EdtMain.SetBorder(true)
+	TxtEditName = tview.NewTextView()
+	TxtEditName.Clear()
+	TxtEditName.SetBorder(true)
+	TblOpenFiles = tview.NewTable()
+	TblOpenFiles.SetBorder(true)
+	TblOpenFiles.SetSelectable(true, false)
+	TblOpenFiles.SetTitle("Open Files")
+	TrvExplorer = tview.NewTreeView()
+	TrvExplorer.SetBorder(true)
+	TrvExplorer.SetTitle("Explorer")
 
 	//*************************************************************************
 	// Main Layout (Shell)
@@ -231,6 +243,15 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
+	TblFiles.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			TblFiles.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		TblFiles.GetCell(row, column).SetTextColor(tcell.ColorRed)
+		TblFiles.SetSelectable(false, false)
+	})
+
 	//*************************************************************************
 	// Process Layout
 	//*************************************************************************
@@ -263,11 +284,11 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(lblTime, 8, 0, false), 1, 0, false).
 		AddItem(tview.NewFlex().
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-				AddItem(TxtProcess, 3, 0, false).
+				AddItem(TxtEditName, 3, 0, false).
 				AddItem(EdtMain, 0, 1, true), 0, 2, true).
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-				AddItem(TblProcUsers, 12, 0, false).
-				AddItem(TxtProcInfo, 0, 1, false), 0, 1, false), 0, 1, false).
+				AddItem(TblOpenFiles, 12, 0, false).
+				AddItem(TrvExplorer, 0, 1, false), 0, 1, false), 0, 1, false).
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
@@ -275,15 +296,9 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
-	TblFiles.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			TblFiles.SetSelectable(true, true)
-		}
-	}).SetSelectedFunc(func(row int, column int) {
-		TblFiles.GetCell(row, column).SetTextColor(tcell.ColorRed)
-		TblFiles.SetSelectable(false, false)
-	})
-
+	//*************************************************************************
+	// Misc
+	//*************************************************************************
 	dlgQuit = tview.NewModal().
 		SetText("Do you want to quit the application ?").
 		AddButtons([]string{"Quit", "Cancel"}).
@@ -412,14 +427,8 @@ func DisplayMap(tv *tview.TextView, m map[string]string) {
 
 	// iterate by sorted keys
 	for _, field := range fields {
-		// fmt.Println(i+1, firstName, designedBy[firstName])
 		out = out + "[red]" + field[2:] + strings.Repeat(" ", maxi-len(field)) + "[white]  " + m[field] + "\n"
 	}
-	/*
-		for key, value := range m {
-			out = out + "[red]" + key + strings.Repeat(" ", maxi-len(key)) + "[white]  " + value + "\n"
-		}
-	*/
 	tv.SetText(out)
 }
 

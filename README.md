@@ -5,6 +5,7 @@
   * Zip
   * Hash
   * Encryption
+  * Timestamp
 * Process Manager
   * Services
 * Network

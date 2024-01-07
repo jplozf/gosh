@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"gosh/conf"
+	"gosh/edit"
 	"gosh/fm"
 	"gosh/pm"
 	"gosh/ui"
@@ -123,6 +124,18 @@ func main() {
 			return nil
 		case tcell.KeyInsert:
 			fm.ProceedFileSelect()
+			return nil
+		case tcell.KeyCtrlA:
+			fm.SelectAll()
+			return nil
+		case tcell.KeyCtrlC:
+			fm.DoCopy()
+			return nil
+		case tcell.KeyCtrlX:
+			fm.DoCut()
+			return nil
+		case tcell.KeyCtrlV:
+			fm.DoPaste()
 			return nil
 		case tcell.KeyTab:
 			if ui.TxtPrompt.HasFocus() {
@@ -255,6 +268,14 @@ func main() {
 		return event
 	})
 
+	ui.EdtMain.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyCtrlS:
+			edit.SaveFile()
+			return nil
+		}
+		return event
+	})
 	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
 	ui.SetTitle(conf.APP_STRING)
 	ui.SetStatus("Welcome.")
@@ -370,10 +391,7 @@ func switchToShell() {
 // switchToShell()
 // ****************************************************************************
 func switchToEditor() {
-	ui.CurrentMode = ui.ModeTextEdit
-	ui.SetTitle("Editor")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F12=Exit")
-	ui.PgsApp.SwitchToPage("editor")
+	edit.SwitchToEditor()
 }
 
 // ****************************************************************************
@@ -383,7 +401,7 @@ func switchToFiles() {
 	ui.CurrentMode = ui.ModeFiles
 	fm.SetFilesMenu()
 	ui.SetTitle("Files")
-	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+C=Copy Ctrl+V=Paste Ctrl+S=Sort")
+	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort")
 	fm.ShowFiles()
 	ui.App.Sync()
 	ui.App.SetFocus(ui.TblFiles)
