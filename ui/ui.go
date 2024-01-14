@@ -35,42 +35,48 @@ const (
 	ModeHexEdit
 	ModeProcess
 	ModeNetwork
+	ModeSQLite3
 )
 
 var (
-	CurrentMode  Mode
-	lblTime      *tview.TextView
-	lblDate      *tview.TextView
-	LblKeys      *tview.TextView
-	App          *tview.Application
-	FlxMain      *tview.Flex
-	FlxFiles     *tview.Flex
-	FlxProcess   *tview.Flex
-	FlxHelp      *tview.Flex
-	FlxEditor    *tview.Flex
-	TxtPrompt    *tview.TextArea
-	TxtConsole   *tview.TextView
-	TxtFileInfo  *tview.TextView
-	TxtProcInfo  *tview.TextView
-	TxtHelp      *tview.TextView
-	lblTitle     *tview.TextView
-	lblStatus    *tview.TextView
-	LblHostname  *tview.TextView
-	LblRC        *tview.TextView
-	PgsApp       *tview.Pages
-	dlgQuit      *tview.Modal
-	TblFiles     *tview.Table
-	TblProcess   *tview.Table
-	TxtPath      *tview.TextView
-	TxtProcess   *tview.TextView
-	FrmFileInfo  *tview.TextView
-	TblProcUsers *tview.Table
-	TxtSelection *tview.TextView
-	StdoutBuf    bytes.Buffer
-	EdtMain      *femto.View
-	TxtEditName  *tview.TextView
-	TblOpenFiles *tview.Table
-	TrvExplorer  *tview.TreeView
+	CurrentMode    Mode
+	lblTime        *tview.TextView
+	lblDate        *tview.TextView
+	LblKeys        *tview.TextView
+	App            *tview.Application
+	FlxMain        *tview.Flex
+	FlxFiles       *tview.Flex
+	FlxProcess     *tview.Flex
+	FlxHelp        *tview.Flex
+	FlxEditor      *tview.Flex
+	FlxSQL         *tview.Flex
+	TxtPrompt      *tview.TextArea
+	TxtConsole     *tview.TextView
+	TxtFileInfo    *tview.TextView
+	TxtProcInfo    *tview.TextView
+	TxtHelp        *tview.TextView
+	lblTitle       *tview.TextView
+	lblStatus      *tview.TextView
+	LblHostname    *tview.TextView
+	LblRC          *tview.TextView
+	PgsApp         *tview.Pages
+	dlgQuit        *tview.Modal
+	TblFiles       *tview.Table
+	TblProcess     *tview.Table
+	TxtPath        *tview.TextView
+	TxtProcess     *tview.TextView
+	FrmFileInfo    *tview.TextView
+	TblProcUsers   *tview.Table
+	TxtSelection   *tview.TextView
+	StdoutBuf      bytes.Buffer
+	EdtMain        *femto.View
+	TxtEditName    *tview.TextView
+	TblOpenFiles   *tview.Table
+	TrvExplorer    *tview.TreeView
+	TxtSQLName     *tview.TextView
+	TblSQLTable    *tview.Table
+	TblSQLTables   *tview.Table
+	TrvSQLDatabase *tview.TreeView
 )
 
 // ****************************************************************************
@@ -165,6 +171,8 @@ func SetUI(fQuit Fn, hostname string) {
 	TxtProcInfo.SetBorder(true)
 	TxtProcInfo.SetDynamicColors(true)
 	TxtProcInfo.SetTitle("Details")
+	TxtProcInfo.SetWrap(false)
+	TxtProcInfo.SetScrollable(true)
 
 	TblProcess = tview.NewTable()
 	TblProcess.SetBorder(true)
@@ -173,6 +181,7 @@ func SetUI(fQuit Fn, hostname string) {
 	TxtProcess = tview.NewTextView()
 	TxtProcess.Clear()
 	TxtProcess.SetBorder(true)
+	TxtProcess.SetDynamicColors(true)
 
 	buffer := femto.NewBufferFromString(string("content"), "./dummy")
 	EdtMain = femto.NewView(buffer)
@@ -187,6 +196,21 @@ func SetUI(fQuit Fn, hostname string) {
 	TrvExplorer = tview.NewTreeView()
 	TrvExplorer.SetBorder(true)
 	TrvExplorer.SetTitle("Explorer")
+
+	TxtSQLName = tview.NewTextView()
+	TxtSQLName.Clear()
+	TxtSQLName.SetBorder(true)
+	TblSQLTable = tview.NewTable()
+	TblSQLTable.SetBorder(true)
+	TblSQLTable.SetSelectable(true, false)
+	TblSQLTable.SetTitle("SQLite3")
+	TblSQLTables = tview.NewTable()
+	TblSQLTables.SetBorder(true)
+	TblSQLTables.SetSelectable(true, false)
+	TblSQLTables.SetTitle("Tables")
+	TrvSQLDatabase = tview.NewTreeView()
+	TrvSQLDatabase.SetBorder(true)
+	TrvSQLDatabase.SetTitle("Database")
 
 	//*************************************************************************
 	// Main Layout (Shell)
@@ -297,6 +321,28 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(LblRC, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
+	// SQLite3 Layout
+	//*************************************************************************
+	FlxSQL = tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(tview.NewFlex().
+			AddItem(lblDate, 10, 0, false).
+			AddItem(lblTitle, 0, 1, false).
+			AddItem(lblTime, 8, 0, false), 1, 0, false).
+		AddItem(tview.NewFlex().
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TxtSQLName, 3, 0, false).
+				AddItem(TblSQLTable, 0, 1, true), 0, 2, true).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TblSQLTables, 12, 0, false).
+				AddItem(TrvSQLDatabase, 0, 1, false), 0, 1, false), 0, 1, false).
+		AddItem(LblKeys, 2, 1, false).
+		AddItem(TxtPrompt, 2, 1, true).
+		AddItem(tview.NewFlex().
+			AddItem(LblHostname, len(hostname)+3, 0, false).
+			AddItem(lblStatus, 0, 1, false).
+			AddItem(LblRC, 5, 0, false), 1, 0, false)
+
+	//*************************************************************************
 	// Misc
 	//*************************************************************************
 	dlgQuit = tview.NewModal().
@@ -318,6 +364,7 @@ func SetUI(fQuit Fn, hostname string) {
 	PgsApp.AddPage("files", FlxFiles, true, false)
 	PgsApp.AddPage("process", FlxProcess, true, false)
 	PgsApp.AddPage("editor", FlxEditor, true, false)
+	PgsApp.AddPage("sqlite3", FlxSQL, true, false)
 	PgsApp.AddPage("dlgQuit", dlgQuit, false, false)
 }
 

@@ -11,12 +11,13 @@
 package pm
 
 // ****************************************************************************
-// pm is the Process Manager module
+// pm is the Process & Services Manager module
 // ****************************************************************************
 
 import (
 	"bufio"
 	"fmt"
+	"gosh/dialog"
 	"gosh/menu"
 	"gosh/ui"
 	"gosh/utils"
@@ -24,14 +25,21 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"golang.org/x/sys/unix"
 )
 
 // ****************************************************************************
 // TYPES
 // ****************************************************************************
+type Signal struct {
+	number int
+	name   string
+}
+
 type ProcessColumns struct {
 	// ps -eo user,s,pid,ppid,pri,ni,pcpu,lstart,time,times,rss,pmem,vsz,cmd --sort +user,-pcpu --no-heading --date-format '%Y%m%d-%H%M%S'
 	user     string
@@ -50,6 +58,14 @@ type ProcessColumns struct {
 	command  string
 }
 
+type ServiceColumns struct {
+	unit        string
+	load        string
+	active      string
+	sub         string
+	description string
+}
+
 type SortColumn int
 
 const (
@@ -64,17 +80,38 @@ const (
 	SORT_DESCENDING = 1
 )
 
+type ViewType int
+
+const (
+	VIEW_PROCESS = iota
+	VIEW_SERVICES
+)
+
 // ****************************************************************************
 // GLOBALS
 // ****************************************************************************
 var Processes = make(map[string][]ProcessColumns)
+var Services []ServiceColumns
 var MnuProcess *menu.Menu
 var MnuProcessSort *menu.Menu
+var MnuService *menu.Menu
 var sortColumn = SORT_PID
 var sortOrder = SORT_ASCENDING
 var headerBackgroundColor = tcell.ColorDarkGreen
 var headerTextColor = tcell.ColorYellow
 var currentUser string
+var DlgRenice *dialog.Dialog
+var DlgSendSignal *dialog.Dialog
+var DlgKill *dialog.Dialog
+var DlgFind *dialog.Dialog
+var Signals []Signal
+var FindString string
+var CurrentView ViewType
+var DlgStartService *dialog.Dialog
+var DlgStopService *dialog.Dialog
+var DlgRestartService *dialog.Dialog
+var DlgEnableService *dialog.Dialog
+var DlgDisableService *dialog.Dialog
 
 // ****************************************************************************
 // SetProcessMenu()
@@ -96,21 +133,38 @@ func SetProcessMenu() {
 	MnuProcessSort.AddItem("mnuSortPCPUD", "CPU% Descending", DoSortCPUD, true)
 	MnuProcessSort.AddItem("mnuSortPMEMA", "MEM% Ascending", DoSortMEMA, true)
 	MnuProcessSort.AddItem("mnuSortPMEMD", "MEM% Descending", DoSortMEMD, true)
+	// MnuProcessSort.AddItem("mnuShowServices", "Show Services", DoShowServices, true)
 	ui.PgsApp.AddPage("dlgProcessSort", MnuProcessSort.Popup(), true, false)
+
+	MnuService = MnuService.New("Actions", "process", ui.TblProcess)
+	MnuService.AddItem("mnuStart", "Start", DoStartService, true)
+	MnuService.AddItem("mnuStop", "Stop", DoStopService, true)
+	MnuService.AddItem("mnuRestart", "Restart", DoRestartService, true)
+	MnuService.AddItem("mnuEnable", "Enable", DoEnableService, true)
+	MnuService.AddItem("mnuDisable", "Disable", DoDisableService, true)
+	ui.PgsApp.AddPage("dlgServiceAction", MnuService.Popup(), true, false)
 }
 
 // ****************************************************************************
 // ShowMenu()
 // ****************************************************************************
 func ShowMenu() {
-	ui.PgsApp.ShowPage("dlgProcessAction")
+	if CurrentView == VIEW_PROCESS {
+		ui.PgsApp.ShowPage("dlgProcessAction")
+	} else {
+		ui.PgsApp.ShowPage("dlgServiceAction")
+	}
 }
 
 // ****************************************************************************
 // ShowMenuSort()
 // ****************************************************************************
 func ShowMenuSort() {
-	ui.PgsApp.ShowPage("dlgProcessSort")
+	if CurrentView == VIEW_PROCESS {
+		ui.PgsApp.ShowPage("dlgProcessSort")
+	} else {
+		ui.SetStatus("No sorting available for services")
+	}
 }
 
 // ****************************************************************************
@@ -120,7 +174,7 @@ func ShowProcesses(user string) {
 	currentUser = user
 	ui.TxtSelection.Clear()
 	ui.PgsApp.SwitchToPage("process")
-	ui.TxtProcess.SetText(fmt.Sprintf("Overall CPU usage is %.2f%%", utils.CpuUsage))
+	ui.TxtProcess.SetText(fmt.Sprintf("Overall CPU usage is [yellow]%.2f%%[white]", utils.CpuUsage))
 
 	Processes = readProcesses()
 	ui.TblProcess.Clear()
@@ -155,30 +209,57 @@ func ShowProcesses(user string) {
 	case SORT_DESCENDING:
 		sorted += " Descending"
 	}
-	ui.TblProcess.SetTitle(fmt.Sprintf("[ %s, sorted by %s ]", user, sorted))
+	if FindString != "" {
+		ui.TblProcess.SetTitle(fmt.Sprintf("[ %s, filtered on \"%s\", sorted by %s ]", user, FindString, sorted))
+	} else {
+		ui.TblProcess.SetTitle(fmt.Sprintf("[ %s, sorted by %s ]", user, sorted))
+	}
 	// PID PRI NI S PCPU PMEM VSZ RSS TIME CMD
-	for i, process := range Processes[user] {
-		ui.TblProcess.SetCell(i+1, 0, tview.NewTableCell(strconv.Itoa(process.pid)).SetAlign(tview.AlignRight).SetTextColor(tcell.ColorYellow))
-		ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(strconv.Itoa(process.priority)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(strconv.Itoa(process.niceness)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 3, tview.NewTableCell(process.state))
-		ui.TblProcess.SetCell(i+1, 4, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pcpu)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 5, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pmem)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(process.vsz)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 7, tview.NewTableCell(strconv.Itoa(process.rss)).SetAlign(tview.AlignRight))
-		ui.TblProcess.SetCell(i+1, 8, tview.NewTableCell(process.time))
-		ui.TblProcess.SetCell(i+1, 9, tview.NewTableCell(strings.Trim(process.command, " ")).SetAlign(tview.AlignLeft))
+	i := 0
+	for _, process := range Processes[user] {
+		if FindString != "" {
+			if strings.Contains(strings.ToUpper(process.command), strings.ToUpper(FindString)) {
+				ui.TblProcess.SetCell(i+1, 0, tview.NewTableCell(strconv.Itoa(process.pid)).SetAlign(tview.AlignRight).SetTextColor(tcell.ColorYellow))
+				ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(strconv.Itoa(process.priority)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(strconv.Itoa(process.niceness)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 3, tview.NewTableCell(process.state))
+				ui.TblProcess.SetCell(i+1, 4, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pcpu)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 5, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pmem)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(process.vsz)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 7, tview.NewTableCell(strconv.Itoa(process.rss)).SetAlign(tview.AlignRight))
+				ui.TblProcess.SetCell(i+1, 8, tview.NewTableCell(process.time))
+				ui.TblProcess.SetCell(i+1, 9, tview.NewTableCell(strings.Trim(process.command, " ")).SetAlign(tview.AlignLeft))
+				i++
+			}
+		} else {
+			ui.TblProcess.SetCell(i+1, 0, tview.NewTableCell(strconv.Itoa(process.pid)).SetAlign(tview.AlignRight).SetTextColor(tcell.ColorYellow))
+			ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(strconv.Itoa(process.priority)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(strconv.Itoa(process.niceness)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 3, tview.NewTableCell(process.state))
+			ui.TblProcess.SetCell(i+1, 4, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pcpu)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 5, tview.NewTableCell(fmt.Sprintf("%.2f%%", process.pmem)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(process.vsz)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 7, tview.NewTableCell(strconv.Itoa(process.rss)).SetAlign(tview.AlignRight))
+			ui.TblProcess.SetCell(i+1, 8, tview.NewTableCell(process.time))
+			ui.TblProcess.SetCell(i+1, 9, tview.NewTableCell(strings.Trim(process.command, " ")).SetAlign(tview.AlignLeft))
+			i++
+		}
 	}
 	ShowUsers()
 	ui.TblProcess.SetFixed(1, 0)
 	ui.TblProcess.Select(1, 0)
+	ui.App.SetFocus(ui.TblProcess)
 }
 
 // ****************************************************************************
 // RefreshMe()
 // ****************************************************************************
 func RefreshMe() {
-	ShowProcesses(currentUser)
+	if CurrentView == VIEW_PROCESS {
+		ShowProcesses(currentUser)
+	} else {
+		ShowServices()
+	}
 	ui.App.SetFocus(ui.TblProcess)
 }
 
@@ -282,7 +363,30 @@ func DoRenice() {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
-		ui.SetStatus("Renicing process " + strconv.Itoa(targetPID))
+		DlgRenice = DlgRenice.Input("Renice PID", // Title
+			fmt.Sprintf("Please, enter the new niceness for process %d :", targetPID), // Message
+			"5",
+			confirmRenice,
+			targetPID,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgRenice", DlgRenice.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgRenice")
+	}
+	// renice -n 5  -p 8721
+}
+
+// ****************************************************************************
+// confirmRenice()
+// ****************************************************************************
+func confirmRenice(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_OK {
+		cmd := exec.Command("renice", "-n", DlgRenice.Value, "-p", fmt.Sprintf("%d", idx))
+		if err := cmd.Run(); err != nil {
+			ui.SetStatus(err.Error())
+		} else {
+			ui.SetStatus(fmt.Sprintf("PID %d reniced to value %s", idx, DlgRenice.Value))
+			showProcessDetails(idx)
+		}
 	}
 }
 
@@ -295,24 +399,24 @@ func DoPause() {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
 		state := getProcessState(targetPID)
 		if state == "S" {
-			if sendSignal(targetPID, "-STOP") == 0 {
-				ui.SetStatus("Pausing process " + strconv.Itoa(targetPID))
+			if sendSignal(targetPID, "-SIGSTOP") == 0 {
+				ui.SetStatus(fmt.Sprintf("Pausing process %d", targetPID))
 				showProcessDetails(targetPID)
 			} else {
-				ui.SetStatus("Unable to pause process " + strconv.Itoa(targetPID))
+				ui.SetStatus(fmt.Sprintf("Unable to pause process %d", targetPID))
 				showProcessDetails(targetPID)
 			}
 		} else {
 			if state == "T" {
-				if sendSignal(targetPID, "-CONT") == 0 {
-					ui.SetStatus("Resuming process " + strconv.Itoa(targetPID))
+				if sendSignal(targetPID, "-SIGCONT") == 0 {
+					ui.SetStatus(fmt.Sprintf("Resuming process %d", targetPID))
 					showProcessDetails(targetPID)
 				} else {
-					ui.SetStatus("Unable to resume process " + strconv.Itoa(targetPID))
+					ui.SetStatus(fmt.Sprintf("Unable to resume process %d", targetPID))
 					showProcessDetails(targetPID)
 				}
 			} else {
-				ui.SetStatus("Unknown state for process " + strconv.Itoa(targetPID))
+				ui.SetStatus(fmt.Sprintf("Unknown state for process %d", targetPID))
 			}
 		}
 	}
@@ -325,18 +429,67 @@ func DoKill() {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
-		ui.SetStatus("Killing process " + strconv.Itoa(targetPID))
+		DlgKill = DlgKill.YesNo("Kill PID", // Title
+			fmt.Sprintf("Are you sure you want to kill process %d :", targetPID), // Message
+			confirmKill,
+			targetPID,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgKill", DlgKill.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgKill")
 	}
 }
 
 // ****************************************************************************
-// DoKill()
+// confirmKill()
+// ****************************************************************************
+func confirmKill(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		if sendSignal(idx, "-SIGKILL") == 0 {
+			ui.SetStatus(fmt.Sprintf("Killing process %d", idx))
+			showProcessDetails(idx)
+		} else {
+			ui.SetStatus(fmt.Sprintf("Unable to kill process %d", idx))
+			showProcessDetails(idx)
+		}
+	}
+}
+
+// ****************************************************************************
+// DoSendSignal()
 // ****************************************************************************
 func DoSendSignal() {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
-		ui.SetStatus("Sending signal to process " + strconv.Itoa(targetPID))
+		var sig []string
+		for _, s := range Signals {
+			sig = append(sig, fmt.Sprintf("%d) %s", s.number, s.name))
+		}
+		DlgSendSignal = DlgSendSignal.List("Send signal", // Title
+			fmt.Sprintf("Please, select the signal to send to process %d :", targetPID), // Message
+			sig[:],
+			confirmSendSignal,
+			targetPID,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgSendSignal", DlgSendSignal.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgSendSignal")
+		ui.SetStatus(fmt.Sprintf("Sending signal to process %d", targetPID))
+	}
+}
+
+// ****************************************************************************
+// confirmSendSignal()
+// ****************************************************************************
+func confirmSendSignal(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_OK {
+		sig := "-" + strings.Split(DlgSendSignal.Value, ") ")[1]
+		if sendSignal(idx, sig) == 0 {
+			ui.SetStatus(fmt.Sprintf("Signal %s sended to PID %d", sig, idx))
+			showProcessDetails(idx)
+		} else {
+			ui.SetStatus(fmt.Sprintf("Unable to send signal %s to PID %d", sig, idx))
+			showProcessDetails(idx)
+		}
 	}
 }
 
@@ -345,10 +498,18 @@ func DoSendSignal() {
 // ****************************************************************************
 func ProceedProcessAction() {
 	idx, _ := ui.TblProcess.GetSelection()
-	if idx > 0 {
-		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
-		showProcessDetails(targetPID)
-		ui.SetStatus(fmt.Sprintf("Details for process %d", targetPID))
+	if CurrentView == VIEW_PROCESS {
+		if idx > 0 {
+			targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
+			showProcessDetails(targetPID)
+			ui.SetStatus(fmt.Sprintf("Details for process %d", targetPID))
+		}
+	} else {
+		if idx > 0 {
+			service := ui.TblProcess.GetCell(idx, 0).Text
+			showServiceDetails(service)
+			ui.SetStatus(fmt.Sprintf("Details for service %s", service))
+		}
 	}
 }
 
@@ -444,6 +605,31 @@ func showProcessDetails(pid int) {
 	} else {
 		infos := map[string]string{
 			"00" + fmt.Sprintf("%d", pid): "This process is no more running.",
+		}
+		ui.DisplayMap(ui.TxtProcInfo, infos)
+	}
+}
+
+// ****************************************************************************
+// showServiceDetails()
+// ****************************************************************************
+func showServiceDetails(service string) {
+	cmd := exec.Command("systemctl", "status", service)
+	bOut, err := cmd.Output()
+	if err == nil {
+		out := string(bOut)
+		scanner := bufio.NewScanner(strings.NewReader(out))
+		i := 0
+		infos := make(map[string]string)
+		for scanner.Scan() {
+			line := scanner.Text()
+			infos[fmt.Sprintf("%02d", i)] = strings.TrimSpace(line)
+			i++
+		}
+		ui.DisplayMap(ui.TxtProcInfo, infos)
+	} else {
+		infos := map[string]string{
+			"00" + service: "Can't get status about this service.",
 		}
 		ui.DisplayMap(ui.TxtProcInfo, infos)
 	}
@@ -585,6 +771,179 @@ func DoSortTimeD() {
 	ShowProcesses(currentUser)
 }
 
+// ****************************************************************************
+// DoFindProcess()
+// ****************************************************************************
+func DoFindProcess() {
+	if CurrentView == VIEW_PROCESS {
+		DlgFind = DlgFind.Input("Find Process", // Title
+			"Please, enter a part of the name to find", // Message
+			FindString,
+			confirmFind,
+			0,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgFind", DlgFind.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgFind")
+	} else {
+		DlgFind = DlgFind.Input("Find Service", // Title
+			"Please, enter a part of the name to find", // Message
+			FindString,
+			confirmFind,
+			0,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgFind", DlgFind.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgFind")
+	}
+}
+
+// ****************************************************************************
+// confirmFind()
+// ****************************************************************************
+func confirmFind(rc dialog.DlgButton, idx int) {
+	if CurrentView == VIEW_PROCESS {
+		if rc == dialog.BUTTON_OK {
+			FindString = DlgFind.Value
+			ShowProcesses(currentUser)
+		}
+	} else {
+		if rc == dialog.BUTTON_OK {
+			FindString = DlgFind.Value
+			ShowServices()
+		}
+	}
+}
+
+// ****************************************************************************
+// SwitchView()
+// ****************************************************************************
+func SwitchView() {
+	if CurrentView == VIEW_PROCESS {
+		CurrentView = VIEW_SERVICES
+		ShowServices()
+	} else {
+		CurrentView = VIEW_PROCESS
+		ShowProcesses(currentUser)
+	}
+}
+
+// ****************************************************************************
+// ShowServices()
+// ****************************************************************************
+func ShowServices() {
+	ui.TxtSelection.Clear()
+	ui.PgsApp.SwitchToPage("process")
+	ui.TxtProcess.SetText(fmt.Sprintf("Overall CPU usage is [yellow]%.2f%%[white]", utils.CpuUsage))
+
+	Services = readServices()
+	ui.TblProcess.Clear()
+	ui.TxtFileInfo.Clear()
+
+	if FindString != "" {
+		ui.TblProcess.SetTitle(fmt.Sprintf("[ Services, filtered on \"%s\" ]", FindString))
+	} else {
+		ui.TblProcess.SetTitle("[ Services ]")
+	}
+
+	// Column's Header
+	ui.TblProcess.SetCell(0, 0, tview.NewTableCell("UNIT").SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+	ui.TblProcess.SetCell(0, 1, tview.NewTableCell("LOAD").SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+	ui.TblProcess.SetCell(0, 2, tview.NewTableCell("ACTIVE").SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+	ui.TblProcess.SetCell(0, 3, tview.NewTableCell("SUB").SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+	ui.TblProcess.SetCell(0, 4, tview.NewTableCell("DESCRIPTION").SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+
+	// UNIT LOAD ACTIVE SUB DESCRIPTION
+	i := 0
+	for _, service := range Services {
+		if FindString != "" {
+			if strings.Contains(strings.ToUpper(service.unit), strings.ToUpper(FindString)) {
+				ui.TblProcess.SetCell(i+1, 0, tview.NewTableCell(service.unit).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorYellow))
+				if service.load == "not-found" {
+					ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(service.load).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorRed))
+				} else {
+					ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(service.load).SetAlign(tview.AlignLeft))
+				}
+				if service.active == "active" {
+					ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(service.active).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorGreen))
+				} else {
+					ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(service.active).SetAlign(tview.AlignLeft))
+				}
+				ui.TblProcess.SetCell(i+1, 3, tview.NewTableCell(service.sub).SetAlign(tview.AlignLeft))
+				ui.TblProcess.SetCell(i+1, 4, tview.NewTableCell(service.description).SetAlign(tview.AlignLeft))
+				i++
+			}
+		} else {
+			ui.TblProcess.SetCell(i+1, 0, tview.NewTableCell(service.unit).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorYellow))
+			if service.load == "not-found" {
+				ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(service.load).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorRed))
+			} else {
+				ui.TblProcess.SetCell(i+1, 1, tview.NewTableCell(service.load).SetAlign(tview.AlignLeft))
+			}
+			if service.active == "active" {
+				ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(service.active).SetAlign(tview.AlignLeft).SetTextColor(tcell.ColorGreen))
+			} else {
+				ui.TblProcess.SetCell(i+1, 2, tview.NewTableCell(service.active).SetAlign(tview.AlignLeft))
+			}
+			ui.TblProcess.SetCell(i+1, 3, tview.NewTableCell(service.sub).SetAlign(tview.AlignLeft))
+			ui.TblProcess.SetCell(i+1, 4, tview.NewTableCell(service.description).SetAlign(tview.AlignLeft))
+			i++
+		}
+	}
+	ShowUsers()
+	ui.TblProcess.SetFixed(1, 0)
+	ui.TblProcess.Select(1, 0)
+	ui.App.SetFocus(ui.TblProcess)
+}
+
+// ****************************************************************************
+// readServices()
+// ****************************************************************************
+func readServices() []ServiceColumns {
+	var services []ServiceColumns
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "--all")
+	bOut, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("%s", err.Error())
+	}
+	out := string(bOut)
+	scanner := bufio.NewScanner(strings.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) > 0 {
+			if fields[0] == "UNIT" {
+				continue
+			}
+			if fields[0] == "LOAD" {
+				break
+			}
+			var s ServiceColumns
+			if fields[0] == "●" {
+				s.unit = fields[1]
+				s.load = fields[2]
+				s.active = fields[3]
+				s.sub = fields[4]
+				s.description = ""
+				for i := 5; i < len(fields); i++ {
+					s.description = s.description + fields[i] + " "
+				}
+				s.description = strings.TrimSpace(s.description)
+			} else {
+				s.unit = fields[0]
+				s.load = fields[1]
+				s.active = fields[2]
+				s.sub = fields[3]
+				s.description = ""
+				for i := 4; i < len(fields); i++ {
+					s.description = s.description + fields[i] + " "
+				}
+				s.description = strings.TrimSpace(s.description)
+			}
+			services = append(services, s)
+		}
+	}
+	return services
+}
+
 /*
 ps -eo pid,user,pcpu,lstart,cmd
 ps -p <pid> -o lstart
@@ -602,3 +961,187 @@ RSS is Resident Set Size. This is the size of memory that a process has currentl
 
 Here’s an example. If you have two image editing programs on your Linux system, they likely utilize many of the same image processing libraries. If you open one of the applications, the necessary library will be loaded into RAM. When you open the second application, it will avoid reloading a duplicate copy of the library into RAM, and just share the same copy that the first application is using. For both applications, the RSS column would count the size of the shared library, even though it’s only been loaded once. This means that the RSS size is often an overestimate of the amount of physical memory that’s actually being used by a process.
 */
+
+// ****************************************************************************
+// InitSignals()
+// ****************************************************************************
+func InitSignals() {
+	// https://stackoverflow.com/questions/42598522/how-can-i-list-available-operating-system-signals-by-name-in-a-cross-platform-wa
+	for i := syscall.Signal(0); i < syscall.Signal(255); i++ {
+		name := unix.SignalName(i)
+		// Signal numbers are not guaranteed to be contiguous.
+		if name != "" {
+			Signals = append(Signals, Signal{int(i), name})
+		}
+	}
+}
+
+// ****************************************************************************
+// DoStartService()
+// ****************************************************************************
+func DoStartService() {
+	idx, _ := ui.TblProcess.GetSelection()
+	if idx > 0 {
+		target := ui.TblProcess.GetCell(idx, 0).Text
+		DlgStartService = DlgStartService.YesNo("Start Service", // Title
+			fmt.Sprintf("Are you sure you want to start service %s :", target), // Message
+			confirmStartService,
+			idx,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgStartService", DlgStartService.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgStartService")
+	}
+}
+
+// ****************************************************************************
+// confirmStartService()
+// ****************************************************************************
+func confirmStartService(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		service := ui.TblProcess.GetCell(idx, 0).Text
+		cmd := exec.Command("sudo", "systemctl", "start", service)
+		if err := cmd.Run(); err == nil {
+			ui.SetStatus(fmt.Sprintf("Service %s started", service))
+			showServiceDetails(service)
+		} else {
+			ui.SetStatus(err.Error())
+			showServiceDetails(service)
+		}
+	}
+}
+
+// ****************************************************************************
+// DoStopService()
+// ****************************************************************************
+func DoStopService() {
+	idx, _ := ui.TblProcess.GetSelection()
+	if idx > 0 {
+		target := ui.TblProcess.GetCell(idx, 0).Text
+		DlgStopService = DlgStopService.YesNo("Stop Service", // Title
+			fmt.Sprintf("Are you sure you want to stop service %s :", target), // Message
+			confirmStopService,
+			idx,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgStopService", DlgStopService.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgStopService")
+	}
+}
+
+// ****************************************************************************
+// confirmStopService()
+// ****************************************************************************
+func confirmStopService(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		service := ui.TblProcess.GetCell(idx, 0).Text
+		cmd := exec.Command("sudo", "systemctl", "stop", service)
+		if err := cmd.Run(); err == nil {
+			ui.SetStatus(fmt.Sprintf("Service %s stopped", service))
+			showServiceDetails(service)
+		} else {
+			ui.SetStatus(err.Error())
+			showServiceDetails(service)
+		}
+	}
+}
+
+// ****************************************************************************
+// DoRestartService()
+// ****************************************************************************
+func DoRestartService() {
+	idx, _ := ui.TblProcess.GetSelection()
+	if idx > 0 {
+		target := ui.TblProcess.GetCell(idx, 0).Text
+		DlgRestartService = DlgRestartService.YesNo("Restart Service", // Title
+			fmt.Sprintf("Are you sure you want to restart service %s :", target), // Message
+			confirmRestartService,
+			idx,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgRestartService", DlgRestartService.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgRestartService")
+	}
+}
+
+// ****************************************************************************
+// confirmRestartService()
+// ****************************************************************************
+func confirmRestartService(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		service := ui.TblProcess.GetCell(idx, 0).Text
+		cmd := exec.Command("sudo", "systemctl", "restart", service)
+		if err := cmd.Run(); err == nil {
+			ui.SetStatus(fmt.Sprintf("Service %s restarted", service))
+			showServiceDetails(service)
+		} else {
+			ui.SetStatus(err.Error())
+			showServiceDetails(service)
+		}
+	}
+}
+
+// ****************************************************************************
+// DoEnableService()
+// ****************************************************************************
+func DoEnableService() {
+	idx, _ := ui.TblProcess.GetSelection()
+	if idx > 0 {
+		target := ui.TblProcess.GetCell(idx, 0).Text
+		DlgEnableService = DlgEnableService.YesNo("Enable Service", // Title
+			fmt.Sprintf("Are you sure you want to enable service %s :", target), // Message
+			confirmEnableService,
+			idx,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgEnableService", DlgEnableService.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgEnableService")
+	}
+}
+
+// ****************************************************************************
+// confirmEnableService()
+// ****************************************************************************
+func confirmEnableService(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		service := ui.TblProcess.GetCell(idx, 0).Text
+		cmd := exec.Command("sudo", "systemctl", "enable", service)
+		if err := cmd.Run(); err == nil {
+			ui.SetStatus(fmt.Sprintf("Service %s enabled", service))
+			showServiceDetails(service)
+		} else {
+			ui.SetStatus(err.Error())
+			showServiceDetails(service)
+		}
+	}
+}
+
+// ****************************************************************************
+// DoDisableService()
+// ****************************************************************************
+func DoDisableService() {
+	idx, _ := ui.TblProcess.GetSelection()
+	if idx > 0 {
+		target := ui.TblProcess.GetCell(idx, 0).Text
+		DlgDisableService = DlgDisableService.YesNo("Disable Service", // Title
+			fmt.Sprintf("Are you sure you want to disable service %s :", target), // Message
+			confirmDisableService,
+			idx,
+			"process", ui.TblProcess) // Focus return
+		ui.PgsApp.AddPage("dlgDisableService", DlgDisableService.Popup(), true, false)
+		ui.PgsApp.ShowPage("dlgDisableService")
+	}
+}
+
+// ****************************************************************************
+// confirmDisableService()
+// ****************************************************************************
+func confirmDisableService(rc dialog.DlgButton, idx int) {
+	if rc == dialog.BUTTON_YES {
+		service := ui.TblProcess.GetCell(idx, 0).Text
+		cmd := exec.Command("sudo", "systemctl", "disable", service)
+		if err := cmd.Run(); err == nil {
+			ui.SetStatus(fmt.Sprintf("Service %s disabled", service))
+			showServiceDetails(service)
+		} else {
+			ui.SetStatus(err.Error())
+			showServiceDetails(service)
+		}
+	}
+}

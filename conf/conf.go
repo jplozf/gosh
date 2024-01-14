@@ -20,7 +20,7 @@ import (
 const (
 	STATUS_MESSAGE_DURATION = 3
 	APP_NAME                = "Gosh"
-	APP_STRING              = "Gosh © JPL 2023"
+	APP_STRING              = "Gosh © jpl@ozf.fr 2024"
 	APP_VERSION             = "0.1.0"
 	APP_URL                 = "https://github.com/jplozf/gosh"
 	HISTORY_CMD_FILE        = "commands_history"
@@ -32,6 +32,8 @@ const (
 	COLOR_EXECUTABLE        = tcell.ColorLightYellow
 	COLOR_SELECTED          = tcell.ColorRed
 	ICON_MODIFIED           = "●"
+	NEW_FILE_TEMPLATE       = "gosh_edit_"
+	LABEL_PARENT_FOLDER     = "<UP>"
 )
 
 var LogFile os.File

@@ -103,8 +103,8 @@ func SetFilesMenu() {
 	MnuFiles.AddItem("mnuZip", "Zip", DoZip, true)
 	// MnuFiles.AddItem("mnuHashes", "Get Hashes", DoDelete, true)
 	// MnuFiles.AddItem("mnuEncrypt", "Encrypt", DoDelete, true)
-	MnuFiles.AddItem("mnuTimestamp", "Timestamp", DoTimestamp, true)
-	MnuFiles.AddItem("mnuSnapshot", "Snapshot (T+Z)", DoSnapshot, true)
+	// MnuFiles.AddItem("mnuTimestamp", "Timestamp", DoTimestamp, true)
+	MnuFiles.AddItem("mnuSnapshot", "Snapshot", DoSnapshot, true)
 	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, true)
 	ui.PgsApp.AddPage("dlgFileAction", MnuFiles.Popup(), true, false)
 
@@ -163,24 +163,28 @@ func ShowMenuSort() {
 func DoDelete() {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
-		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-		if targetType == "FILE" {
-			DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete File %s", fName), // Title
-				"Are you sure you want to delete this file ?", // Message
-				DeleteFile,
-				idx,
-				"files", ui.TblFiles) // Focus return
-			ui.PgsApp.AddPage("dlgConfirmDeleteFile", DlgConfirm.Popup(), true, false)
-			ui.PgsApp.ShowPage("dlgConfirmDeleteFile")
+		if ui.TblFiles.GetCell(idx, 3).Text != conf.LABEL_PARENT_FOLDER {
+			targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
+			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			if targetType == "FILE" {
+				DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete File %s", fName), // Title
+					"Are you sure you want to delete this file ?", // Message
+					DeleteFile,
+					idx,
+					"files", ui.TblFiles) // Focus return
+				ui.PgsApp.AddPage("dlgConfirmDeleteFile", DlgConfirm.Popup(), true, false)
+				ui.PgsApp.ShowPage("dlgConfirmDeleteFile")
+			} else {
+				DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete Folder %s", fName), // Title
+					"Are you sure you want to delete this folder and all its content ?", // Message
+					DeleteFolder,
+					idx,
+					"files", ui.TblFiles) // Focus return
+				ui.PgsApp.AddPage("dlgConfirmDeleteFolder", DlgConfirm.Popup(), true, false)
+				ui.PgsApp.ShowPage("dlgConfirmDeleteFolder")
+			}
 		} else {
-			DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete Folder %s", fName), // Title
-				"Are you sure you want to delete this folder and all its content ?", // Message
-				DeleteFolder,
-				idx,
-				"files", ui.TblFiles) // Focus return
-			ui.PgsApp.AddPage("dlgConfirmDeleteFolder", DlgConfirm.Popup(), true, false)
-			ui.PgsApp.ShowPage("dlgConfirmDeleteFolder")
+			ui.SetStatus("Can't delete parent folder")
 		}
 	} else {
 		DlgConfirm = DlgConfirm.YesNoCancel("Delete Selection", // Title
@@ -283,6 +287,7 @@ func DoRename() {
 		if targetType == "FILE" {
 			DlgConfirm = DlgConfirm.Input(fmt.Sprintf("Rename File %s", fName), // Title
 				"Please, enter the new name :", // Message
+				filepath.Base(fName),
 				RenameFile,
 				idx,
 				"files", ui.TblFiles) // Focus return
@@ -291,6 +296,7 @@ func DoRename() {
 		} else {
 			DlgConfirm = DlgConfirm.Input(fmt.Sprintf("Rename Folder %s", fName), // Title
 				"Please, enter the new name :", // Message
+				filepath.Base(fName),
 				RenameFolder,
 				idx,
 				"files", ui.TblFiles) // Focus return
@@ -483,6 +489,7 @@ func DoZip() {
 func DoNewFile() {
 	DlgConfirm = DlgConfirm.Input("Create New File", // Title
 		"Please, enter the name for this new file :", // Message
+		"new_file",
 		CreateNewFile,
 		0,
 		"files", ui.TblFiles) // Focus return
@@ -497,6 +504,7 @@ func DoNewFile() {
 func DoNewFolder() {
 	DlgConfirm = DlgConfirm.Input("Create New Folder", // Title
 		"Please, enter the name for this new folder :", // Message
+		"new_folder",
 		CreateNewFolder,
 		0,
 		"files", ui.TblFiles) // Focus return
@@ -698,7 +706,7 @@ func ShowFiles() {
 		ui.TblFiles.SetCell(0, 0, tview.NewTableCell("   "))
 		ui.TblFiles.SetCell(0, 1, tview.NewTableCell(" "))
 		ui.TblFiles.SetCell(0, 2, tview.NewTableCell("..").SetTextColor(tcell.ColorYellow))
-		ui.TblFiles.SetCell(0, 3, tview.NewTableCell("<UP>"))
+		ui.TblFiles.SetCell(0, 3, tview.NewTableCell(conf.LABEL_PARENT_FOLDER))
 		ui.TblFiles.SetCell(0, 4, tview.NewTableCell(" "))
 		ui.TblFiles.SetCell(0, 5, tview.NewTableCell(" "))
 		ui.TblFiles.SetCell(0, 6, tview.NewTableCell(" "))
@@ -1006,7 +1014,7 @@ func ProceedFileAction() {
 // ****************************************************************************
 func ProceedFileSelect() {
 	idx, _ := ui.TblFiles.GetSelection()
-	if ui.TblFiles.GetCell(idx, 3).Text != "<UP>" {
+	if ui.TblFiles.GetCell(idx, 3).Text != conf.LABEL_PARENT_FOLDER {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 			if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 				// SELECT FILE
@@ -1221,6 +1229,5 @@ func SelectAll() {
 func DoEdit() {
 	idx, _ := ui.TblFiles.GetSelection()
 	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-	edit.OpenFile(fName)
-	edit.SwitchToEditor()
+	edit.SwitchToEditor(fName)
 }

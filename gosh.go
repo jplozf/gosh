@@ -14,19 +14,19 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"strings"
 
+	"gosh/cmd"
 	"gosh/conf"
 	"gosh/edit"
 	"gosh/fm"
 	"gosh/pm"
+	"gosh/sq3"
 	"gosh/ui"
 	"gosh/utils"
 
@@ -35,13 +35,10 @@ import (
 )
 
 var (
-	appDir      string
-	aCmd        []string
-	iCmd        int
-	currentUser string
-	hostname    string
-	greeting    string
-	err         error
+	appDir   string
+	hostname string
+	greeting string
+	err      error
 )
 
 // ****************************************************************************
@@ -59,10 +56,10 @@ func init() {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
-	currentUser = user.Username
-	greeting = currentUser + "@" + hostname + ":"
+	cmd.CurrentUser = user.Username
+	greeting = cmd.CurrentUser + "@" + hostname + ":"
 
-	iCmd = 0
+	cmd.ICmd = 0
 	ui.App = tview.NewApplication()
 	ui.SetUI(appQuit, greeting)
 
@@ -81,6 +78,8 @@ func init() {
 	}
 
 	readSettings()
+	pm.CurrentView = pm.VIEW_PROCESS
+	pm.InitSignals()
 }
 
 // ****************************************************************************
@@ -91,15 +90,17 @@ func main() {
 	ui.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyF1:
-			switchToHelp()
+			cmd.SwitchToHelp()
 		case tcell.KeyF2:
-			switchToShell()
+			cmd.SwitchToShell()
 		case tcell.KeyF3:
-			switchToFiles()
+			cmd.SwitchToFiles()
 		case tcell.KeyF4:
-			switchToProcess()
+			cmd.SwitchToProcess()
 		case tcell.KeyF6:
-			switchToEditor()
+			cmd.SwitchToEditor()
+		case tcell.KeyF9:
+			cmd.SwitchToSQLite3()
 		case tcell.KeyF12:
 			ui.PgsApp.ShowPage("dlgQuit")
 		case tcell.KeyCtrlC:
@@ -137,6 +138,9 @@ func main() {
 		case tcell.KeyCtrlV:
 			fm.DoPaste()
 			return nil
+		case tcell.KeyDelete:
+			fm.DoDelete()
+			return nil
 		case tcell.KeyTab:
 			if ui.TxtPrompt.HasFocus() {
 				ui.App.SetFocus(ui.TblFiles)
@@ -159,8 +163,14 @@ func main() {
 		case tcell.KeyF8:
 			pm.ShowMenu()
 			return nil
+		case tcell.KeyCtrlF:
+			pm.DoFindProcess()
+			return nil
 		case tcell.KeyCtrlS:
 			pm.ShowMenuSort()
+			return nil
+		case tcell.KeyCtrlV:
+			pm.SwitchView()
 			return nil
 		case tcell.KeyTab:
 			if ui.TxtPrompt.HasFocus() {
@@ -195,9 +205,19 @@ func main() {
 		*/
 		case tcell.KeyTab:
 			if ui.TblProcUsers.HasFocus() {
-				ui.App.SetFocus(ui.TxtPrompt)
+				ui.App.SetFocus(ui.TxtProcInfo)
 				return nil
 			}
+		}
+		return event
+	})
+
+	// ProcInfo keyboard's events manager
+	ui.TxtProcInfo.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTAB:
+			ui.App.SetFocus(ui.TxtPrompt)
+			return nil
 		}
 		return event
 	})
@@ -216,30 +236,35 @@ func main() {
 	ui.TxtPrompt.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
-			if ui.TxtPrompt.GetText() != "" {
-				// TODO : Manage the case we are not in Shell mode
-				xeq(ui.TxtPrompt.GetText())
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				if ui.TxtPrompt.GetText() != "" {
+					sq3.Xeq(ui.TxtPrompt.GetText())
+				}
+			} else {
+				if ui.TxtPrompt.GetText() != "" {
+					cmd.Xeq(ui.TxtPrompt.GetText())
+				}
 			}
 			return nil
 		case tcell.KeyUp:
-			if len(aCmd) > 0 {
-				if iCmd < len(aCmd)-1 {
-					iCmd++
+			if len(cmd.ACmd) > 0 {
+				if cmd.ICmd < len(cmd.ACmd)-1 {
+					cmd.ICmd++
 				} else {
-					iCmd = 0
+					cmd.ICmd = 0
 				}
-				ui.TxtPrompt.SetText(aCmd[iCmd], true)
+				ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
 				ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
 			}
 			return nil
 		case tcell.KeyDown:
-			if len(aCmd) > 0 {
-				if iCmd > 0 {
-					iCmd--
+			if len(cmd.ACmd) > 0 {
+				if cmd.ICmd > 0 {
+					cmd.ICmd--
 				} else {
-					iCmd = len(aCmd) - 1
+					cmd.ICmd = len(cmd.ACmd) - 1
 				}
-				ui.TxtPrompt.SetText(aCmd[iCmd], true)
+				ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
 				ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
 			}
 			return nil
@@ -252,6 +277,9 @@ func main() {
 			}
 			if ui.CurrentMode == ui.ModeProcess {
 				ui.App.SetFocus(ui.TblProcess)
+			}
+			if ui.CurrentMode == ui.ModeTextEdit {
+				ui.App.SetFocus(ui.EdtMain)
 			}
 			return nil
 		}
@@ -268,10 +296,47 @@ func main() {
 		return event
 	})
 
+	// Editor keyboard's events manager
 	ui.EdtMain.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		evkSaveAs := tcell.NewEventKey(tcell.KeyRune, 's', tcell.ModAlt)
+		if event.Key() == evkSaveAs.Key() && event.Rune() == evkSaveAs.Rune() && event.Modifiers() == evkSaveAs.Modifiers() {
+			edit.SaveFileAs()
+			return nil
+		}
 		switch event.Key() {
 		case tcell.KeyCtrlS:
 			edit.SaveFile()
+			return nil
+		case tcell.KeyCtrlN:
+			edit.NewFile(fm.Cwd)
+			return nil
+		case tcell.KeyCtrlT:
+			edit.CloseCurrentFile()
+			return nil
+		case tcell.KeyEsc:
+			ui.App.SetFocus(ui.TblOpenFiles)
+			return nil
+		}
+		return event
+	})
+	ui.TblOpenFiles.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			ui.App.SetFocus(ui.TrvExplorer)
+			return nil
+		case tcell.KeyEnter:
+			idx, _ := ui.TblOpenFiles.GetSelection()
+			fName := ui.TblOpenFiles.GetCell(idx, 3).Text
+			edit.SwitchOpenFile(fName)
+			ui.App.SetFocus(ui.EdtMain)
+			return nil
+		}
+		return event
+	})
+	ui.TrvExplorer.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			ui.App.SetFocus(ui.TxtPrompt)
 			return nil
 		}
 		return event
@@ -279,7 +344,7 @@ func main() {
 	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
 	ui.SetTitle(conf.APP_STRING)
 	ui.SetStatus("Welcome.")
-	switchToShell()
+	cmd.SwitchToShell()
 	welcome()
 
 	go ui.UpdateTime()
@@ -294,45 +359,10 @@ func main() {
 // appQuit performs some cleanup and saves persistent data before quitting application
 // ****************************************************************************
 func appQuit() {
+	edit.CheckOpenFilesForSaving()
 	saveSettings()
 	ui.App.Stop()
-	fmt.Println("👻" + conf.APP_STRING)
-}
-
-// ****************************************************************************
-// xeq()
-// ****************************************************************************
-func xeq(c string) {
-	// c = " bash -c " + c
-	sCmd := strings.Fields(c)
-	aCmd = append(aCmd, c)
-	iCmd++
-	switch sCmd[0] {
-	case "cls":
-		ui.TxtConsole.SetText("")
-	case "quit":
-		ui.PgsApp.SwitchToPage("dlgQuit")
-	case "shell":
-		switchToShell()
-	case "files":
-		switchToFiles()
-	case "process":
-		switchToProcess()
-	case "editor":
-		switchToEditor()
-	default:
-		switchToShell()
-		ui.SetStatus("Running [" + c + "]")
-		ui.HeaderConsole(c)
-
-		xCmd := exec.Command(sCmd[0], sCmd[1:]...)
-		xCmd.Stdout = io.MultiWriter(&ui.StdoutBuf) // ui.StdoutBuf is displayed through the ui.UpdateTime go routine
-		err := xCmd.Run()
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-	}
-	ui.TxtPrompt.SetText("", false)
+	fmt.Printf("\n👻%s\n\n", conf.APP_STRING)
 }
 
 // ****************************************************************************
@@ -347,7 +377,7 @@ func readSettings() {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		aCmd = append(aCmd, scanner.Text())
+		cmd.ACmd = append(cmd.ACmd, scanner.Text())
 	}
 }
 
@@ -362,62 +392,10 @@ func saveSettings() {
 	}
 	defer file.Close()
 	w := bufio.NewWriter(file)
-	for _, line := range aCmd {
+	for _, line := range cmd.ACmd {
 		fmt.Fprintln(w, line)
 	}
 	w.Flush()
-}
-
-// ****************************************************************************
-// switchToHelp()
-// ****************************************************************************
-func switchToHelp() {
-	ui.SetTitle("Help")
-	ui.LblKeys.SetText("F2=Shell F3=Files F4=Process F6=Editor F12=Exit")
-	ui.PgsApp.SwitchToPage("help")
-}
-
-// ****************************************************************************
-// switchToShell()
-// ****************************************************************************
-func switchToShell() {
-	ui.CurrentMode = ui.ModeShell
-	ui.SetTitle("Shell")
-	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F6=Editor F12=Exit")
-	ui.PgsApp.SwitchToPage("main")
-}
-
-// ****************************************************************************
-// switchToShell()
-// ****************************************************************************
-func switchToEditor() {
-	edit.SwitchToEditor()
-}
-
-// ****************************************************************************
-// switchToFiles()
-// ****************************************************************************
-func switchToFiles() {
-	ui.CurrentMode = ui.ModeFiles
-	fm.SetFilesMenu()
-	ui.SetTitle("Files")
-	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nIns=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort")
-	fm.ShowFiles()
-	ui.App.Sync()
-	ui.App.SetFocus(ui.TblFiles)
-}
-
-// ****************************************************************************
-// switchToProcess()
-// ****************************************************************************
-func switchToProcess() {
-	ui.CurrentMode = ui.ModeProcess
-	pm.SetProcessMenu()
-	ui.SetTitle("Process")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+F=Find Ctrl+S=Sort")
-	pm.ShowProcesses(currentUser)
-	ui.App.Sync()
-	ui.App.SetFocus(ui.TblProcess)
 }
 
 // ****************************************************************************

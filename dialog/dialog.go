@@ -37,6 +37,7 @@ type DlgInput int
 const (
 	INPUT_NONE DlgInput = iota
 	INPUT_TEXT
+	INPUT_LIST
 )
 
 type DlgRC struct {
@@ -51,6 +52,7 @@ type Dialog struct {
 	done    func(rc DlgButton, idx int)
 	buttons []*tview.Button
 	Value   string
+	Values  []string
 	parent  string
 	focus   tview.Primitive
 	width   int
@@ -143,11 +145,12 @@ func (m *Dialog) OK(title string, message string, done func(rc DlgButton, idx in
 // ****************************************************************************
 // Input()
 // ****************************************************************************
-func (m *Dialog) Input(title string, message string, done func(rc DlgButton, idx int), idx int, parent string, focus tview.Primitive) *Dialog {
+func (m *Dialog) Input(title string, message string, value string, done func(rc DlgButton, idx int), idx int, parent string, focus tview.Primitive) *Dialog {
 	m = &Dialog{
 		Form:    tview.NewForm(),
 		title:   title,
 		message: message,
+		Value:   value,
 		done:    done,
 		parent:  parent,
 		focus:   focus,
@@ -168,15 +171,47 @@ func (m *Dialog) Input(title string, message string, done func(rc DlgButton, idx
 }
 
 // ****************************************************************************
+// List()
+// ****************************************************************************
+func (m *Dialog) List(title string, message string, values []string, done func(rc DlgButton, idx int), idx int, parent string, focus tview.Primitive) *Dialog {
+	m = &Dialog{
+		Form:    tview.NewForm(),
+		title:   title,
+		message: message,
+		Values:  values,
+		done:    done,
+		parent:  parent,
+		focus:   focus,
+		idx:     idx,
+		dtype:   INPUT_LIST,
+	}
+
+	m.SetButtonsAlign(tview.AlignCenter)
+	m.SetButtonBackgroundColor(tview.Styles.PrimitiveBackgroundColor)
+	m.SetButtonTextColor(tview.Styles.PrimaryTextColor)
+	m.SetBackgroundColor(tview.Styles.ContrastBackgroundColor).SetBorderPadding(0, 0, 0, 0)
+	m.SetBorder(true).
+		SetBackgroundColor(tview.Styles.ContrastBackgroundColor).
+		SetBorderPadding(1, 1, 1, 1)
+	m.buttons = append(m.buttons, tview.NewButton("OK").SetSelectedFunc(m.doOK))
+	m.buttons = append(m.buttons, tview.NewButton("Cancel").SetSelectedFunc(m.doCancel))
+	return m
+}
+
+// ****************************************************************************
 // refresh() the dialog
 // ****************************************************************************
 func (m *Dialog) refresh() {
 	m.SetTitle(m.title)
 
-	if m.dtype == INPUT_TEXT {
+	switch m.dtype {
+	case INPUT_TEXT:
 		m.AddTextView("", m.message, 0, 1, true, false)
-		m.AddInputField(">", "", 15, nil, nil)
-	} else {
+		m.AddInputField(">", m.Value, 0, nil, nil)
+	case INPUT_LIST:
+		m.AddTextView("", m.message, 0, 1, true, false)
+		m.AddDropDown("", m.Values, 0, nil)
+	default:
 		m.AddTextView("", m.message, 0, 1, true, false)
 	}
 
@@ -202,8 +237,8 @@ func (m *Dialog) refresh() {
 		m.width = len(m.title)
 	}
 	m.width += 10
-	m.height = 7
-	if m.dtype == INPUT_TEXT {
+	m.height = 9
+	if m.dtype == INPUT_TEXT || m.dtype == INPUT_LIST {
 		m.height += 2
 	}
 }
@@ -265,6 +300,13 @@ func (m *Dialog) doCancel() {
 func (m *Dialog) doOK() {
 	ui.PgsApp.SwitchToPage(m.parent)
 	ui.App.SetFocus(m.focus)
-	m.Value = m.GetFormItem(1).(*tview.InputField).GetText()
+	switch m.dtype {
+	case INPUT_TEXT:
+		m.Value = m.GetFormItem(1).(*tview.InputField).GetText()
+	case INPUT_LIST:
+		_, m.Value = m.GetFormItem(1).(*tview.DropDown).GetCurrentOption()
+	default:
+		m.Value = ""
+	}
 	m.done(BUTTON_OK, m.idx)
 }
