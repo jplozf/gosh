@@ -22,6 +22,7 @@ import (
 	"runtime"
 
 	"gosh/cmd"
+	"gosh/cmd/hexedit"
 	"gosh/conf"
 	"gosh/edit"
 	"gosh/fm"
@@ -67,7 +68,7 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fm.Cwd = userDir
+	conf.Cwd = userDir
 	fm.Hidden = false
 	appDir = filepath.Join(userDir, conf.APP_FOLDER)
 	if _, err := os.Stat(appDir); errors.Is(err, os.ErrNotExist) {
@@ -80,6 +81,8 @@ func init() {
 	readSettings()
 	pm.CurrentView = pm.VIEW_PROCESS
 	pm.InitSignals()
+	sq3.CurrentDatabaseName = ":memory:"
+	sq3.SetSQLMenu()
 }
 
 // ****************************************************************************
@@ -105,6 +108,17 @@ func main() {
 			ui.PgsApp.ShowPage("dlgQuit")
 		case tcell.KeyCtrlC:
 			return nil
+		case tcell.KeyCtrlO:
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				sq3.DoOpenDB(conf.Cwd)
+			}
+			if ui.CurrentMode == ui.ModeHexEdit {
+				hexedit.DoOpen(conf.Cwd)
+			}
+		case tcell.KeyCtrlS:
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				sq3.DoCloseDB()
+			}
 		}
 		return event
 	})
@@ -247,25 +261,49 @@ func main() {
 			}
 			return nil
 		case tcell.KeyUp:
-			if len(cmd.ACmd) > 0 {
-				if cmd.ICmd < len(cmd.ACmd)-1 {
-					cmd.ICmd++
-				} else {
-					cmd.ICmd = 0
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				if len(sq3.ACmd) > 0 {
+					if sq3.ICmd < len(sq3.ACmd)-1 {
+						sq3.ICmd++
+					} else {
+						sq3.ICmd = 0
+					}
+					ui.TxtPrompt.SetText(sq3.ACmd[sq3.ICmd], true)
+					ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
 				}
-				ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
-				ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
+			} else {
+				if len(cmd.ACmd) > 0 {
+					if cmd.ICmd < len(cmd.ACmd)-1 {
+						cmd.ICmd++
+					} else {
+						cmd.ICmd = 0
+					}
+					ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
+					ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
+				}
 			}
 			return nil
 		case tcell.KeyDown:
-			if len(cmd.ACmd) > 0 {
-				if cmd.ICmd > 0 {
-					cmd.ICmd--
-				} else {
-					cmd.ICmd = len(cmd.ACmd) - 1
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				if len(sq3.ACmd) > 0 {
+					if sq3.ICmd > 0 {
+						sq3.ICmd--
+					} else {
+						sq3.ICmd = len(sq3.ACmd) - 1
+					}
+					ui.TxtPrompt.SetText(sq3.ACmd[sq3.ICmd], true)
+					ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
 				}
-				ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
-				ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
+			} else {
+				if len(cmd.ACmd) > 0 {
+					if cmd.ICmd > 0 {
+						cmd.ICmd--
+					} else {
+						cmd.ICmd = len(cmd.ACmd) - 1
+					}
+					ui.TxtPrompt.SetText(cmd.ACmd[cmd.ICmd], true)
+					ui.TxtPrompt.Select(0, ui.TxtPrompt.GetTextLength())
+				}
 			}
 			return nil
 		case tcell.KeyTab:
@@ -280,6 +318,9 @@ func main() {
 			}
 			if ui.CurrentMode == ui.ModeTextEdit {
 				ui.App.SetFocus(ui.EdtMain)
+			}
+			if ui.CurrentMode == ui.ModeSQLite3 {
+				ui.App.SetFocus(ui.TblSQLOutput)
 			}
 			return nil
 		}
@@ -308,7 +349,7 @@ func main() {
 			edit.SaveFile()
 			return nil
 		case tcell.KeyCtrlN:
-			edit.NewFile(fm.Cwd)
+			edit.NewFile(conf.Cwd)
 			return nil
 		case tcell.KeyCtrlT:
 			edit.CloseCurrentFile()
@@ -341,7 +382,37 @@ func main() {
 		}
 		return event
 	})
-	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
+
+	// SQLite3 keyboard's events manager
+	ui.TblSQLOutput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyF8:
+			sq3.ShowMenu()
+			return nil
+		case tcell.KeyTab:
+			ui.App.SetFocus(ui.TblSQLTables)
+			return nil
+		}
+		return event
+	})
+	ui.TblSQLTables.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			ui.App.SetFocus(ui.TrvSQLDatabase)
+			return nil
+		}
+		return event
+	})
+	ui.TrvSQLDatabase.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			ui.App.SetFocus(ui.TxtPrompt)
+			return nil
+		}
+		return event
+	})
+
+	// ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
 	ui.SetTitle(conf.APP_STRING)
 	ui.SetStatus("Welcome.")
 	cmd.SwitchToShell()
@@ -369,15 +440,25 @@ func appQuit() {
 // readSettings()
 // ****************************************************************************
 func readSettings() {
-	// Read history commands file
-	file, err := os.Open(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
+	// Read commands history file
+	fCmd, err := os.Open(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
 	if err != nil {
 		return
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		cmd.ACmd = append(cmd.ACmd, scanner.Text())
+	defer fCmd.Close()
+	sCmd := bufio.NewScanner(fCmd)
+	for sCmd.Scan() {
+		cmd.ACmd = append(cmd.ACmd, sCmd.Text())
+	}
+	// Read SQL history file
+	fSQL, err := os.Open(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
+	if err != nil {
+		return
+	}
+	defer fSQL.Close()
+	sSQL := bufio.NewScanner(fSQL)
+	for sSQL.Scan() {
+		sq3.ACmd = append(sq3.ACmd, sSQL.Text())
 	}
 }
 
@@ -385,17 +466,28 @@ func readSettings() {
 // saveSettings()
 // ****************************************************************************
 func saveSettings() {
-	// Save history commands file
-	file, err := os.Create(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
+	// Save commands history file
+	fCmd, err := os.Create(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
 	if err != nil {
 		return
 	}
-	defer file.Close()
-	w := bufio.NewWriter(file)
+	defer fCmd.Close()
+	wCmd := bufio.NewWriter(fCmd)
 	for _, line := range cmd.ACmd {
-		fmt.Fprintln(w, line)
+		fmt.Fprintln(wCmd, line)
 	}
-	w.Flush()
+	wCmd.Flush()
+	// Save SQL history file
+	fSQL, err := os.Create(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
+	if err != nil {
+		return
+	}
+	defer fSQL.Close()
+	wSQL := bufio.NewWriter(fSQL)
+	for _, line := range sq3.ACmd {
+		fmt.Fprintln(wSQL, line)
+	}
+	wSQL.Flush()
 }
 
 // ****************************************************************************

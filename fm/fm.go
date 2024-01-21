@@ -21,6 +21,7 @@ import (
 	"gosh/edit"
 	"gosh/menu"
 	"gosh/preview"
+	"gosh/sq3"
 	"gosh/ui"
 	"gosh/utils"
 	"io/fs"
@@ -73,7 +74,6 @@ const (
 var sortColumn = SORT_NAME
 var sortOrder = SORT_ASCENDING
 var (
-	Cwd          string
 	Hidden       bool
 	MnuFiles     *menu.Menu
 	MnuFilesSort *menu.Menu
@@ -132,15 +132,15 @@ func ShowMenu() {
 		MnuFiles.SetEnabled("mnuEncrypt", false)
 	}
 	if targetType == "FILE" {
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-		mtype, _ := preview.DisplayFilePreview(fName)
-		if mtype[:4] == "text" {
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		mtype, xtype := preview.DisplayFilePreview(fName)
+		if mtype[:4] == "text" || strings.HasSuffix(xtype, "sqlite3") {
 			MnuFiles.SetEnabled("mnuEdit", true)
 		} else {
 			MnuFiles.SetEnabled("mnuEdit", false)
 		}
-		MnuFiles.SetEnabled("mnuOpen", true)
-		MnuFiles.SetEnabled("mnuEncrypt", true)
+		// MnuFiles.SetEnabled("mnuOpen", true)
+		// MnuFiles.SetEnabled("mnuEncrypt", true)
 	}
 	if Hidden {
 		MnuFiles.SetLabel("mnuShowHiddenFiles", "Hide hidden files")
@@ -165,7 +165,7 @@ func DoDelete() {
 		idx, _ := ui.TblFiles.GetSelection()
 		if ui.TblFiles.GetCell(idx, 3).Text != conf.LABEL_PARENT_FOLDER {
 			targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			if targetType == "FILE" {
 				DlgConfirm = DlgConfirm.YesNoCancel(fmt.Sprintf("Delete File %s", fName), // Title
 					"Are you sure you want to delete this file ?", // Message
@@ -202,7 +202,7 @@ func DoDelete() {
 // ****************************************************************************
 func DeleteFile(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_YES {
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		err := os.Remove(fName)
 		if err != nil {
 			ui.SetStatus(err.Error())
@@ -225,7 +225,7 @@ func DeleteFile(button dialog.DlgButton, idx int) {
 func DeleteFolder(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_YES {
 		ui.SetStatus("Deleting folder " + ui.TblFiles.GetCell(idx, 2).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		err := os.RemoveAll(fName)
 		if err != nil {
 			ui.SetStatus(err.Error())
@@ -283,7 +283,7 @@ func DoRename() {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		if targetType == "FILE" {
 			DlgConfirm = DlgConfirm.Input(fmt.Sprintf("Rename File %s", fName), // Title
 				"Please, enter the new name :", // Message
@@ -313,8 +313,8 @@ func DoRename() {
 // ****************************************************************************
 func RenameFile(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_OK {
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-		fNew := filepath.Join(Cwd, DlgConfirm.Value)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fNew := filepath.Join(conf.Cwd, DlgConfirm.Value)
 		err := os.Rename(fName, fNew)
 		if err != nil {
 			ui.SetStatus(err.Error())
@@ -335,8 +335,8 @@ func RenameFile(button dialog.DlgButton, idx int) {
 // ****************************************************************************
 func RenameFolder(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_OK {
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-		fNew := filepath.Join(Cwd, DlgConfirm.Value)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fNew := filepath.Join(conf.Cwd, DlgConfirm.Value)
 		err := os.Rename(fName, fNew)
 		if err != nil {
 			ui.SetStatus(err.Error())
@@ -359,7 +359,7 @@ func DoTimestamp() {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		current := time.Now()
 		if targetType == "FILE" {
 			fNew := utils.FilenameWithoutExtension(fName) + current.Format("_20060102-150405") + filepath.Ext(fName)
@@ -398,7 +398,7 @@ func DoSnapshot() {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		current := time.Now()
 		if targetType == "FILE" {
 			fNew := utils.FilenameWithoutExtension(fName) + current.Format("_20060102-150405") + filepath.Ext(fName)
@@ -443,7 +443,7 @@ func DoZip() {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		if targetType == "FILE" {
 			fArchive := utils.FilenameWithoutExtension(fName) + ".zip"
 			fArchive = utils.GetFilenameWhichDoesntExist(fArchive)
@@ -518,7 +518,7 @@ func DoNewFolder() {
 // ****************************************************************************
 func CreateNewFile(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_OK {
-		fNew := filepath.Join(Cwd, DlgConfirm.Value)
+		fNew := filepath.Join(conf.Cwd, DlgConfirm.Value)
 		if utils.IsFileExist(fNew) {
 			ui.SetStatus(fmt.Sprintf("File %s already exists", fNew))
 		} else {
@@ -542,7 +542,7 @@ func CreateNewFile(button dialog.DlgButton, idx int) {
 // ****************************************************************************
 func CreateNewFolder(button dialog.DlgButton, idx int) {
 	if button == dialog.BUTTON_OK {
-		fNew := filepath.Join(Cwd, DlgConfirm.Value)
+		fNew := filepath.Join(conf.Cwd, DlgConfirm.Value)
 		if utils.IsFileExist(fNew) {
 			ui.SetStatus(fmt.Sprintf("Folder %s already exists", fNew))
 		} else {
@@ -568,7 +568,7 @@ func DoCopy() {
 	if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 			// SELECT FILE
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			fSize, _ := strconv.Atoi(ui.TblFiles.GetCell(idx, 6).Text)
 			ui.SetStatus(fName)
 			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -578,7 +578,7 @@ func DoCopy() {
 			sel = append(sel, selecao{fName: fName, fSize: int64(fSize), fType: "FILE"})
 		} else {
 			// SELECT FOLDER
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			fSize, _ := utils.DirSize(fName)
 			ui.SetStatus(fName)
 			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -588,7 +588,7 @@ func DoCopy() {
 			sel = append(sel, selecao{fName: fName, fSize: fSize, fType: "FOLDER"})
 		}
 		pasteMode = PASTE_COPY
-		pasteSource = Cwd
+		pasteSource = conf.Cwd
 		displaySelection()
 	}
 }
@@ -601,7 +601,7 @@ func DoCut() {
 	if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 			// SELECT FILE
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			fSize, _ := strconv.Atoi(ui.TblFiles.GetCell(idx, 6).Text)
 			ui.SetStatus(fName)
 			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -611,7 +611,7 @@ func DoCut() {
 			sel = append(sel, selecao{fName: fName, fSize: int64(fSize), fType: "FILE"})
 		} else {
 			// SELECT FOLDER
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			fSize, _ := utils.DirSize(fName)
 			ui.SetStatus(fName)
 			ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -621,7 +621,7 @@ func DoCut() {
 			sel = append(sel, selecao{fName: fName, fSize: fSize, fType: "FOLDER"})
 		}
 		pasteMode = PASTE_CUT
-		pasteSource = Cwd
+		pasteSource = conf.Cwd
 		displaySelection()
 	}
 }
@@ -631,10 +631,10 @@ func DoCut() {
 // ****************************************************************************
 func DoPaste() {
 	var fName string
-	if Cwd == pasteSource {
+	if conf.Cwd == pasteSource {
 		ui.SetStatus("Can't paste into the same folder")
 	} else {
-		pasteTarget = Cwd
+		pasteTarget = conf.Cwd
 		if pasteMode == PASTE_COPY || pasteMode == PASTE_DEFAULT {
 			for _, s := range sel {
 				if s.fType == "FOLDER" {
@@ -693,7 +693,7 @@ func DoSwitchHiddenFiles() {
 func ShowFiles() {
 	// ui.TxtSelection.Clear()
 	ui.PgsApp.SwitchToPage("files")
-	files, err := os.ReadDir(Cwd)
+	files, err := os.ReadDir(conf.Cwd)
 	if err != nil {
 		ui.SetStatus(err.Error())
 	}
@@ -702,7 +702,7 @@ func ShowFiles() {
 	ui.TxtFileInfo.Clear()
 	iStart := 0
 	iFile := 0
-	if Cwd != "/" {
+	if conf.Cwd != "/" {
 		ui.TblFiles.SetCell(0, 0, tview.NewTableCell("   "))
 		ui.TblFiles.SetCell(0, 1, tview.NewTableCell(" "))
 		ui.TblFiles.SetCell(0, 2, tview.NewTableCell("..").SetTextColor(tcell.ColorYellow))
@@ -713,7 +713,7 @@ func ShowFiles() {
 		ui.TblFiles.SetCell(0, 7, tview.NewTableCell(" "))
 		iStart = 1
 	}
-	ui.TxtPath.SetText(Cwd)
+	ui.TxtPath.SetText(conf.Cwd)
 	switch sortColumn {
 	case SORT_NAME:
 		if sortOrder == SORT_ASCENDING {
@@ -753,7 +753,7 @@ func ShowFiles() {
 					ui.TblFiles.SetCell(iFile+iStart, 1, tview.NewTableCell("🔗"))
 					ui.TblFiles.SetCell(iFile+iStart, 4, tview.NewTableCell("  LINK"))
 
-					lnk, err := os.Readlink(filepath.Join(Cwd, ui.TblFiles.GetCell(iFile+iStart, 2).Text))
+					lnk, err := os.Readlink(filepath.Join(conf.Cwd, ui.TblFiles.GetCell(iFile+iStart, 2).Text))
 					if err == nil {
 						ui.TblFiles.SetCell(iFile+iStart, 7, tview.NewTableCell(lnk))
 					} else {
@@ -948,7 +948,7 @@ func ProceedFileAction() {
 	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
 	if targetType == "LINK" {
 		targetType = "FILE"
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		fFile, err := os.Readlink(fName)
 		if err == nil {
 			info, err := os.Stat(fFile)
@@ -964,7 +964,7 @@ func ProceedFileAction() {
 		}
 	}
 	if targetType == "FILE" { // or type(readlink)==file
-		fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		ui.FrmFileInfo.Clear()
 
 		mtype, xmtype := preview.DisplayFilePreview(fName)
@@ -991,14 +991,14 @@ func ProceedFileAction() {
 			ui.TxtFileInfo.SetText("VERY BIG FILE, can't display a preview.")
 		}
 	} else { //  or type(readlink)==folder
-		Cwd = filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+		conf.Cwd = filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 		ui.FrmFileInfo.Clear()
-		nFiles, nFolders, err := utils.NumberOfFilesAndFolders(Cwd)
+		nFiles, nFolders, err := utils.NumberOfFilesAndFolders(conf.Cwd)
 		if err != nil {
 			ui.SetStatus(err.Error())
 		}
 		infos := map[string]string{
-			"00Name":    Cwd,
+			"00Name":    conf.Cwd,
 			"01Files":   strconv.Itoa(nFiles),
 			"02Folders": strconv.Itoa(nFolders),
 		}
@@ -1018,7 +1018,7 @@ func ProceedFileSelect() {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 			if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 				// SELECT FILE
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				fSize, _ := strconv.Atoi(ui.TblFiles.GetCell(idx, 6).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -1029,7 +1029,7 @@ func ProceedFileSelect() {
 				displaySelection()
 			} else {
 				// UNSELECT FILE
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
 				if ui.TblFiles.GetCell(idx, 1).Text == "⚙" {
@@ -1047,7 +1047,7 @@ func ProceedFileSelect() {
 		} else {
 			if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 				// SELECT FOLDER
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				fSize, _ := utils.DirSize(fName)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -1058,7 +1058,7 @@ func ProceedFileSelect() {
 				displaySelection()
 			} else {
 				// UNSELECT FOLDER
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
 				ui.TblFiles.GetCell(idx, 0).SetTextColor(conf.COLOR_FOLDER)
@@ -1133,7 +1133,7 @@ func findAndDelete(s []selecao, item selecao) []selecao {
 func applySelection() {
 	if len(sel) > 0 {
 		for idx := 0; idx < ui.TblFiles.GetRowCount(); idx++ {
-			fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+			fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 			for _, s := range sel {
 				if s.fName == fName && s.fType == strings.Trim(ui.TblFiles.GetCell(idx, 4).Text, " ") {
 					ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -1167,7 +1167,7 @@ func SelectAll() {
 		for idx := 1; idx < ui.TblFiles.GetRowCount(); idx++ {
 			if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 				// SELECT FILE
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				fSize, _ := strconv.Atoi(ui.TblFiles.GetCell(idx, 6).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -1177,7 +1177,7 @@ func SelectAll() {
 				sel = append(sel, selecao{fName: fName, fSize: int64(fSize), fType: "FILE"})
 			} else {
 				// SELECT FOLDER
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				fSize, _ := utils.DirSize(fName)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell(" ✓ "))
@@ -1193,7 +1193,7 @@ func SelectAll() {
 		for idx := 1; idx < ui.TblFiles.GetRowCount(); idx++ {
 			if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
 				// UNSELECT FILE
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
 				if ui.TblFiles.GetCell(idx, 1).Text == "⚙" {
@@ -1208,7 +1208,7 @@ func SelectAll() {
 				sel = findAndDelete(sel, selecao{fName: fName, fSize: 0, fType: "FILE"})
 			} else {
 				// UNSELECT FOLDER
-				fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+				fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 				ui.SetStatus(fName)
 				ui.TblFiles.SetCell(idx, 0, tview.NewTableCell("   "))
 				ui.TblFiles.GetCell(idx, 0).SetTextColor(conf.COLOR_FOLDER)
@@ -1228,6 +1228,13 @@ func SelectAll() {
 // ****************************************************************************
 func DoEdit() {
 	idx, _ := ui.TblFiles.GetSelection()
-	fName := filepath.Join(Cwd, ui.TblFiles.GetCell(idx, 2).Text)
-	edit.SwitchToEditor(fName)
+	fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
+	mtype, xtype := preview.DisplayFilePreview(fName)
+	if mtype[:4] == "text" {
+		edit.SwitchToEditor(fName)
+	}
+	if strings.HasSuffix(xtype, "sqlite3") {
+		sq3.OpenDB(fName)
+		sq3.SwitchToSQLite3()
+	}
 }

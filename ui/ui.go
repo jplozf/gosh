@@ -50,6 +50,7 @@ var (
 	FlxHelp        *tview.Flex
 	FlxEditor      *tview.Flex
 	FlxSQL         *tview.Flex
+	FlxHexEdit     *tview.Flex
 	TxtPrompt      *tview.TextArea
 	TxtConsole     *tview.TextView
 	TxtFileInfo    *tview.TextView
@@ -74,9 +75,11 @@ var (
 	TblOpenFiles   *tview.Table
 	TrvExplorer    *tview.TreeView
 	TxtSQLName     *tview.TextView
-	TblSQLTable    *tview.Table
+	TblSQLOutput   *tview.Table
 	TblSQLTables   *tview.Table
 	TrvSQLDatabase *tview.TreeView
+	TxtHexName     *tview.TextView
+	TblHexEdit     *tview.Table
 )
 
 // ****************************************************************************
@@ -200,10 +203,11 @@ func SetUI(fQuit Fn, hostname string) {
 	TxtSQLName = tview.NewTextView()
 	TxtSQLName.Clear()
 	TxtSQLName.SetBorder(true)
-	TblSQLTable = tview.NewTable()
-	TblSQLTable.SetBorder(true)
-	TblSQLTable.SetSelectable(true, false)
-	TblSQLTable.SetTitle("SQLite3")
+	TxtSQLName.SetDynamicColors(true)
+	TblSQLOutput = tview.NewTable()
+	TblSQLOutput.SetBorder(true)
+	TblSQLOutput.SetSelectable(true, true)
+	TblSQLOutput.SetTitle("Output")
 	TblSQLTables = tview.NewTable()
 	TblSQLTables.SetBorder(true)
 	TblSQLTables.SetSelectable(true, false)
@@ -211,6 +215,15 @@ func SetUI(fQuit Fn, hostname string) {
 	TrvSQLDatabase = tview.NewTreeView()
 	TrvSQLDatabase.SetBorder(true)
 	TrvSQLDatabase.SetTitle("Database")
+
+	TxtHexName = tview.NewTextView()
+	TxtHexName.Clear()
+	TxtHexName.SetBorder(true)
+	TxtHexName.SetDynamicColors(true)
+	TblHexEdit = tview.NewTable()
+	TblHexEdit.SetBorder(true)
+	TblHexEdit.SetSelectable(true, true)
+	TblHexEdit.SetTitle("Hexa View")
 
 	//*************************************************************************
 	// Main Layout (Shell)
@@ -331,7 +344,29 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 				AddItem(TxtSQLName, 3, 0, false).
-				AddItem(TblSQLTable, 0, 1, true), 0, 2, true).
+				AddItem(TblSQLOutput, 0, 1, true), 0, 2, true).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TblSQLTables, 12, 0, false).
+				AddItem(TrvSQLDatabase, 0, 1, false), 0, 1, false), 0, 1, false).
+		AddItem(LblKeys, 2, 1, false).
+		AddItem(TxtPrompt, 2, 1, true).
+		AddItem(tview.NewFlex().
+			AddItem(LblHostname, len(hostname)+3, 0, false).
+			AddItem(lblStatus, 0, 1, false).
+			AddItem(LblRC, 5, 0, false), 1, 0, false)
+
+	//*************************************************************************
+	// HexaEditor Layout
+	//*************************************************************************
+	FlxHexEdit = tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(tview.NewFlex().
+			AddItem(lblDate, 10, 0, false).
+			AddItem(lblTitle, 0, 1, false).
+			AddItem(lblTime, 8, 0, false), 1, 0, false).
+		AddItem(tview.NewFlex().
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(TxtHexName, 3, 0, false).
+				AddItem(TblHexEdit, 0, 1, true), 0, 2, true).
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 				AddItem(TblSQLTables, 12, 0, false).
 				AddItem(TrvSQLDatabase, 0, 1, false), 0, 1, false), 0, 1, false).
@@ -365,6 +400,7 @@ func SetUI(fQuit Fn, hostname string) {
 	PgsApp.AddPage("process", FlxProcess, true, false)
 	PgsApp.AddPage("editor", FlxEditor, true, false)
 	PgsApp.AddPage("sqlite3", FlxSQL, true, false)
+	PgsApp.AddPage("hexedit", FlxHexEdit, true, false)
 	PgsApp.AddPage("dlgQuit", dlgQuit, false, false)
 }
 

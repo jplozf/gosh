@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -429,4 +430,16 @@ func CopyFileIntoFolder(source string, dest string) (err error) {
 func CopyFolderIntoFolder(source string, dest string) (err error) {
 	destFolder := filepath.Join(dest, filepath.Base(source))
 	return CopyDir(source, destFolder)
+}
+
+// ****************************************************************************
+// IsAsciiPrintable()
+// ****************************************************************************
+func IsAsciiPrintable(s string) bool {
+	for _, r := range s {
+		if r > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }

@@ -12,6 +12,7 @@ package cmd
 
 import (
 	"fmt"
+	"gosh/conf"
 	"gosh/edit"
 	"gosh/fm"
 	"gosh/help"
@@ -56,6 +57,8 @@ func Xeq(c string) {
 			SwitchToSQLite3()
 		case "!help":
 			SwitchToHelp()
+		case "!hex":
+			SwitchToHexEdit()
 		default:
 			ui.SetStatus(fmt.Sprintf("Invalid command %s", sCmd[0]))
 		}
@@ -87,6 +90,7 @@ func SwitchToHelp() {
 	help.SetHelp()
 	ui.LblKeys.SetText("F2=Shell F3=Files F4=Process F6=Editor F9=SQLite3 F12=Exit")
 	ui.PgsApp.SwitchToPage("help")
+	ui.App.SetFocus(ui.TxtHelp)
 }
 
 // ****************************************************************************
@@ -105,19 +109,19 @@ func SwitchToShell() {
 func SwitchToEditor() {
 	if ui.CurrentMode == ui.ModeFiles {
 		idx, _ := ui.TblFiles.GetSelection()
-		fName := filepath.Join(fm.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+		fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
 		mtype := utils.GetMimeType(fName)
 		if len(mtype) > 3 {
 			if mtype[:4] == "text" {
 				edit.SwitchToEditor(fName)
 			} else {
-				edit.NewFileOrLastFile(fm.Cwd)
+				edit.NewFileOrLastFile(conf.Cwd)
 			}
 		} else {
-			edit.NewFileOrLastFile(fm.Cwd)
+			edit.NewFileOrLastFile(conf.Cwd)
 		}
 	} else {
-		edit.NewFileOrLastFile(fm.Cwd)
+		edit.NewFileOrLastFile(conf.Cwd)
 	}
 }
 
@@ -140,8 +144,20 @@ func SwitchToFiles() {
 func SwitchToSQLite3() {
 	ui.CurrentMode = ui.ModeSQLite3
 	ui.SetTitle("SQLite3")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nDel=Delete Ins=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort")
+	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
 	ui.PgsApp.SwitchToPage("sqlite3")
+	// sq3.OpenDB(sq3.CurrentDatabaseName)
+	ui.App.SetFocus(ui.TxtPrompt)
+}
+
+// ****************************************************************************
+// SwitchToHexEdit()
+// ****************************************************************************
+func SwitchToHexEdit() {
+	ui.CurrentMode = ui.ModeHexEdit
+	ui.SetTitle("HexEdit")
+	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+	ui.PgsApp.SwitchToPage("hexedit")
 	ui.App.SetFocus(ui.TxtPrompt)
 }
 
