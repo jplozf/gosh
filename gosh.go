@@ -22,10 +22,10 @@ import (
 	"runtime"
 
 	"gosh/cmd"
-	"gosh/cmd/hexedit"
 	"gosh/conf"
 	"gosh/edit"
 	"gosh/fm"
+	"gosh/hexedit"
 	"gosh/pm"
 	"gosh/sq3"
 	"gosh/ui"
@@ -46,8 +46,6 @@ var (
 // init()
 // ****************************************************************************
 func init() {
-	conf.SetLog()
-	log.SetOutput(&conf.LogFile)
 	hostname, err = os.Hostname()
 	if err != nil {
 		hostname = "localhost"
@@ -78,6 +76,17 @@ func init() {
 		}
 	}
 
+	conf.LogFile, err = os.OpenFile(filepath.Join(appDir, conf.LOG_FILE), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		panic(err)
+	}
+	/*
+		defer f.Close()
+
+		if _, err = f.WriteString(text); err != nil {
+			panic(err)
+		}
+	*/
 	readSettings()
 	pm.CurrentView = pm.VIEW_PROCESS
 	pm.InitSignals()
@@ -118,6 +127,9 @@ func main() {
 		case tcell.KeyCtrlS:
 			if ui.CurrentMode == ui.ModeSQLite3 {
 				sq3.DoCloseDB()
+			}
+			if ui.CurrentMode == ui.ModeHexEdit {
+				hexedit.Close()
 			}
 		}
 		return event
@@ -432,6 +444,7 @@ func main() {
 func appQuit() {
 	edit.CheckOpenFilesForSaving()
 	saveSettings()
+	ui.SetStatus("Quitting...")
 	ui.App.Stop()
 	fmt.Printf("\n👻%s\n\n", conf.APP_STRING)
 }
@@ -441,6 +454,7 @@ func appQuit() {
 // ****************************************************************************
 func readSettings() {
 	// Read commands history file
+	ui.SetStatus("Reading commands history")
 	fCmd, err := os.Open(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
 	if err != nil {
 		return
@@ -451,6 +465,7 @@ func readSettings() {
 		cmd.ACmd = append(cmd.ACmd, sCmd.Text())
 	}
 	// Read SQL history file
+	ui.SetStatus("Reading SQL history")
 	fSQL, err := os.Open(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
 	if err != nil {
 		return
@@ -467,6 +482,7 @@ func readSettings() {
 // ****************************************************************************
 func saveSettings() {
 	// Save commands history file
+	ui.SetStatus("Saving commands history")
 	fCmd, err := os.Create(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
 	if err != nil {
 		return
@@ -478,6 +494,7 @@ func saveSettings() {
 	}
 	wCmd.Flush()
 	// Save SQL history file
+	ui.SetStatus("Saving SQL history")
 	fSQL, err := os.Create(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
 	if err != nil {
 		return

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"gosh/dialog"
 	"gosh/ui"
+	"gosh/utils"
 	"io"
 	"os"
 	"unicode"
@@ -34,12 +35,14 @@ var (
 	DlgOpen               *dialog.Dialog
 	headerBackgroundColor = tcell.ColorBlue
 	headerTextColor       = tcell.ColorWhite
+	CurrentHexFile        string
 )
 
 // ****************************************************************************
 // Open()
 // ****************************************************************************
 func Open(fName string) {
+	CurrentHexFile = fName
 	f, err := os.Open(fName)
 	if err != nil {
 		ui.SetStatus(err.Error())
@@ -92,7 +95,7 @@ func Open(fName string) {
 		}
 	}
 	offset--
-	ui.TxtHexName.SetText(fmt.Sprintf("[white]File [yellow]%s[white] (Size [yellow]%d[white] bytes)", fName, offset))
+	ui.TxtHexName.SetText(fmt.Sprintf("[white]File [yellow]%s[white] (Size [yellow]%d[white] bytes, [yellow]%s[white])", fName, offset, utils.HumanFileSize(float64(offset))))
 	ui.TblHexEdit.SetFixed(1, 0)
 	ui.TblHexEdit.Select(1, 0)
 	ui.TblHexEdit.ScrollToBeginning()
@@ -121,4 +124,14 @@ func confirmOpen(rc dialog.DlgButton, idx int) {
 		fName := DlgOpen.Value
 		Open(fName)
 	}
+}
+
+// ****************************************************************************
+// Close()
+// ****************************************************************************
+func Close() {
+	// TODO : Save any modification on file
+	ui.TblHexEdit.Clear()
+	ui.TxtHexName.Clear()
+	CurrentHexFile = ""
 }

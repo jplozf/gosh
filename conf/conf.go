@@ -11,7 +11,6 @@
 package conf
 
 import (
-	"log"
 	"os"
 
 	"github.com/gdamore/tcell/v2"
@@ -35,18 +34,8 @@ const (
 	ICON_MODIFIED           = "●"
 	NEW_FILE_TEMPLATE       = "gosh_edit_"
 	LABEL_PARENT_FOLDER     = "<UP>"
+	LOG_FILE                = "gosh.log"
 )
 
-var LogFile os.File
 var Cwd string
-
-// ****************************************************************************
-// SetLog()
-// ****************************************************************************
-func SetLog() {
-	LogFile, err := os.OpenFile("gosh.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetOutput(LogFile)
-}
+var LogFile *os.File

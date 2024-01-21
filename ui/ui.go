@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"fmt"
 	"gosh/conf"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -81,13 +80,6 @@ var (
 	TxtHexName     *tview.TextView
 	TblHexEdit     *tview.Table
 )
-
-// ****************************************************************************
-// init()
-// ****************************************************************************
-func init() {
-	log.SetOutput(&conf.LogFile)
-}
 
 // ****************************************************************************
 // setUI()
@@ -466,8 +458,8 @@ func SetStatus(t string) {
 		lblStatus.SetText("")
 	}
 	time.AfterFunc(DurationOfTime, f)
-	// TODO : Send status string to log file
-	// log.Fatal(t)
+	current := time.Now()
+	conf.LogFile.WriteString(fmt.Sprintf("%s : %s\n", current.Format("20060102-150405"), t))
 }
 
 // ****************************************************************************

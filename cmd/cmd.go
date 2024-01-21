@@ -16,13 +16,17 @@ import (
 	"gosh/edit"
 	"gosh/fm"
 	"gosh/help"
+	"gosh/hexedit"
 	"gosh/pm"
+	"gosh/sq3"
 	"gosh/ui"
 	"gosh/utils"
 	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/gabriel-vasile/mimetype"
 )
 
 var (
@@ -142,23 +146,82 @@ func SwitchToFiles() {
 // SwitchToSQLite3()
 // ****************************************************************************
 func SwitchToSQLite3() {
-	ui.CurrentMode = ui.ModeSQLite3
-	ui.SetTitle("SQLite3")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
-	ui.PgsApp.SwitchToPage("sqlite3")
-	// sq3.OpenDB(sq3.CurrentDatabaseName)
-	ui.App.SetFocus(ui.TxtPrompt)
+	if ui.CurrentMode == ui.ModeFiles {
+		idx, _ := ui.TblFiles.GetSelection()
+		fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+		xtype, _ := mimetype.DetectFile(fName)
+		if strings.HasSuffix(xtype.String(), "sqlite3") {
+			// Is there an open database ?
+			if sq3.CurrentDB == nil {
+				// no, then open the targeted database
+				err := sq3.OpenDB(fName)
+				if err == nil {
+					ui.CurrentMode = ui.ModeSQLite3
+					ui.SetTitle("SQLite3")
+					ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+					ui.PgsApp.SwitchToPage("sqlite3")
+					ui.App.SetFocus(ui.TxtPrompt)
+				} else {
+					ui.CurrentMode = ui.ModeSQLite3
+					ui.SetTitle("SQLite3")
+					ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+					ui.PgsApp.SwitchToPage("sqlite3")
+					ui.App.SetFocus(ui.TxtPrompt)
+					ui.SetStatus(err.Error())
+				}
+			} else {
+				// attach the targeted database to the current database
+				sq3.DoExec(fmt.Sprintf("attach database '%s' as %s", fName, utils.FilenameWithoutExtension(filepath.Base(fName))))
+				ui.CurrentMode = ui.ModeSQLite3
+				ui.SetTitle("SQLite3")
+				ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+				ui.PgsApp.SwitchToPage("sqlite3")
+				ui.App.SetFocus(ui.TxtPrompt)
+			}
+		} else {
+			ui.CurrentMode = ui.ModeSQLite3
+			ui.SetTitle("SQLite3")
+			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.PgsApp.SwitchToPage("sqlite3")
+			ui.App.SetFocus(ui.TxtPrompt)
+		}
+	} else {
+		ui.CurrentMode = ui.ModeSQLite3
+		ui.SetTitle("SQLite3")
+		ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+		ui.PgsApp.SwitchToPage("sqlite3")
+		ui.App.SetFocus(ui.TxtPrompt)
+	}
 }
 
 // ****************************************************************************
 // SwitchToHexEdit()
 // ****************************************************************************
 func SwitchToHexEdit() {
-	ui.CurrentMode = ui.ModeHexEdit
-	ui.SetTitle("HexEdit")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
-	ui.PgsApp.SwitchToPage("hexedit")
-	ui.App.SetFocus(ui.TxtPrompt)
+	if ui.CurrentMode == ui.ModeFiles {
+		if hexedit.CurrentHexFile == "" {
+			idx, _ := ui.TblFiles.GetSelection()
+			fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+			hexedit.Open(fName)
+			ui.CurrentMode = ui.ModeHexEdit
+			ui.SetTitle("HexEdit")
+			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.PgsApp.SwitchToPage("hexedit")
+			ui.App.SetFocus(ui.TxtPrompt)
+		} else {
+			ui.CurrentMode = ui.ModeHexEdit
+			ui.SetTitle("HexEdit")
+			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.PgsApp.SwitchToPage("hexedit")
+			ui.App.SetFocus(ui.TxtPrompt)
+		}
+	} else {
+		ui.CurrentMode = ui.ModeHexEdit
+		ui.SetTitle("HexEdit")
+		ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+		ui.PgsApp.SwitchToPage("hexedit")
+		ui.App.SetFocus(ui.TxtPrompt)
+	}
 }
 
 // ****************************************************************************

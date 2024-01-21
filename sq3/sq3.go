@@ -111,13 +111,26 @@ func Xeq(c string) {
 		if strings.HasPrefix(strings.ToUpper(c), "SELECT") {
 			doSelect(c)
 		} else {
-			_, err := CurrentDB.Exec(c)
-			if err != nil {
-				ui.SetStatus(err.Error())
+			if CurrentDB != nil {
+				DoExec(c)
+			} else {
+				ui.SetStatus("No open database")
 			}
 		}
 	}
 	ui.TxtPrompt.SetText("", false)
+}
+
+// ****************************************************************************
+// DoExec()
+// ****************************************************************************
+func DoExec(cmd string) {
+	_, err := CurrentDB.Exec(cmd)
+	if err != nil {
+		ui.SetStatus(err.Error())
+	} else {
+		ui.SetStatus(fmt.Sprintf("Executing %s", cmd))
+	}
 }
 
 // ****************************************************************************
@@ -130,6 +143,7 @@ func OpenDB(fName string) error {
 		ui.TxtSQLName.SetText(fmt.Sprintf("Database [yellow]%s", fName))
 		CurrentDatabaseName = fName
 		showTreeDB()
+		ui.SetStatus(fmt.Sprintf("Database %s open successfully", fName))
 	}
 	return err
 }
@@ -146,6 +160,8 @@ func CloseDB(db *sql.DB) {
 	ui.TrvSQLDatabase.GetRoot().ClearChildren()
 	root = tview.NewTreeNode("")
 	ui.TrvSQLDatabase.SetRoot(root).SetCurrentNode(root)
+	CurrentDB = nil
+	CurrentDatabaseName = ""
 }
 
 // ****************************************************************************
@@ -307,65 +323,69 @@ func getTriggers() []string {
 // doSelect()
 // ****************************************************************************
 func doSelect(q string) {
-	ui.TblSQLOutput.Clear()
-	var myMap = make(map[string]interface{})
-	rows, err := CurrentDB.Query(q)
-	if err != nil {
-		ui.SetStatus(err.Error())
-	} else {
-		defer rows.Close()
-		colNames, err := rows.Columns()
+	if CurrentDB != nil {
+		ui.TblSQLOutput.Clear()
+		var myMap = make(map[string]interface{})
+		rows, err := CurrentDB.Query(q)
 		if err != nil {
 			ui.SetStatus(err.Error())
 		} else {
-			cols := make([]interface{}, len(colNames))
-			colPtrs := make([]interface{}, len(colNames))
-			for i := 0; i < len(colNames); i++ {
-				colPtrs[i] = &cols[i]
-			}
-			// Header of fields names
-			for k, colName := range colNames {
-				ui.TblSQLOutput.SetCell(0, k, tview.NewTableCell(tview.Escape("["+colName+"]")).SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
-			}
-			i := 1
-			for rows.Next() {
-				err = rows.Scan(colPtrs...)
-				if err != nil {
-					ui.SetStatus(err.Error())
-				} else {
-					for k, col := range cols {
-						myMap[colNames[k]] = col
-					}
-					j := 0
-					for k := range cols {
-						field := colNames[k]
-						value := myMap[field]
-						if reflect.TypeOf(value) != nil {
-							typeVal := reflect.TypeOf(value).String()
-							if typeVal == "string" {
-								ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%s", value)))
-							}
-							if strings.HasPrefix(typeVal, "int") {
-								ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%d", value)).SetAlign(tview.AlignRight))
-							}
-							if strings.HasPrefix(typeVal, "float") {
-								ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%f", value)).SetAlign(tview.AlignRight))
-							}
-							if strings.HasPrefix(typeVal, "bool") {
-								ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%t", value)).SetAlign(tview.AlignCenter))
-							}
-						} else {
-							ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell("(NULL)").SetAlign(tview.AlignCenter))
-						}
-						j++
-					}
+			defer rows.Close()
+			colNames, err := rows.Columns()
+			if err != nil {
+				ui.SetStatus(err.Error())
+			} else {
+				cols := make([]interface{}, len(colNames))
+				colPtrs := make([]interface{}, len(colNames))
+				for i := 0; i < len(colNames); i++ {
+					colPtrs[i] = &cols[i]
 				}
-				i++
+				// Header of fields names
+				for k, colName := range colNames {
+					ui.TblSQLOutput.SetCell(0, k, tview.NewTableCell(tview.Escape("["+colName+"]")).SetAlign(tview.AlignLeft).SetTextColor(headerTextColor).SetBackgroundColor(headerBackgroundColor))
+				}
+				i := 1
+				for rows.Next() {
+					err = rows.Scan(colPtrs...)
+					if err != nil {
+						ui.SetStatus(err.Error())
+					} else {
+						for k, col := range cols {
+							myMap[colNames[k]] = col
+						}
+						j := 0
+						for k := range cols {
+							field := colNames[k]
+							value := myMap[field]
+							if reflect.TypeOf(value) != nil {
+								typeVal := reflect.TypeOf(value).String()
+								if typeVal == "string" {
+									ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%s", value)))
+								}
+								if strings.HasPrefix(typeVal, "int") {
+									ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%d", value)).SetAlign(tview.AlignRight))
+								}
+								if strings.HasPrefix(typeVal, "float") {
+									ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%f", value)).SetAlign(tview.AlignRight))
+								}
+								if strings.HasPrefix(typeVal, "bool") {
+									ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell(fmt.Sprintf("%t", value)).SetAlign(tview.AlignCenter))
+								}
+							} else {
+								ui.TblSQLOutput.SetCell(i, j, tview.NewTableCell("(NULL)").SetAlign(tview.AlignCenter))
+							}
+							j++
+						}
+					}
+					i++
+				}
+				ui.TblSQLOutput.SetFixed(1, 0)
+				ui.TblSQLOutput.Select(1, 0)
+				ui.App.SetFocus(ui.TblSQLOutput)
 			}
-			ui.TblSQLOutput.SetFixed(1, 0)
-			ui.TblSQLOutput.Select(1, 0)
-			ui.App.SetFocus(ui.TblSQLOutput)
 		}
+	} else {
+		ui.SetStatus("No open database")
 	}
 }
 
@@ -477,6 +497,5 @@ func SwitchToSQLite3() {
 	ui.SetTitle("SQLite3")
 	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
 	ui.PgsApp.SwitchToPage("sqlite3")
-	// sq3.OpenDB(sq3.CurrentDatabaseName)
 	ui.App.SetFocus(ui.TxtPrompt)
 }

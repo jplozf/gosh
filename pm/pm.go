@@ -819,9 +819,11 @@ func confirmFind(rc dialog.DlgButton, idx int) {
 func SwitchView() {
 	if CurrentView == VIEW_PROCESS {
 		CurrentView = VIEW_SERVICES
+		ui.SetStatus("Switching view to services")
 		ShowServices()
 	} else {
 		CurrentView = VIEW_PROCESS
+		ui.SetStatus("Switching view to process")
 		ShowProcesses(currentUser)
 	}
 }
