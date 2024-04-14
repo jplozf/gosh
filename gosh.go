@@ -12,8 +12,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -25,7 +27,9 @@ import (
 	"gosh/conf"
 	"gosh/edit"
 	"gosh/fm"
+	"gosh/help"
 	"gosh/hexedit"
+	"gosh/menu"
 	"gosh/pm"
 	"gosh/sq3"
 	"gosh/ui"
@@ -40,12 +44,14 @@ var (
 	hostname string
 	greeting string
 	err      error
+	MnuMain  *menu.Menu
 )
 
 // ****************************************************************************
 // init()
 // ****************************************************************************
 func init() {
+	ui.SessionID, _ = utils.RandomHex(3)
 	hostname, err = os.Hostname()
 	if err != nil {
 		hostname = "localhost"
@@ -62,6 +68,9 @@ func init() {
 	ui.App = tview.NewApplication()
 	ui.SetUI(appQuit, greeting)
 
+	ui.PgsApp.AddPage("shell", ui.FlxShell, true, true)
+	ui.PgsApp.AddPage("dlgQuit", ui.DlgQuit, false, false)
+
 	userDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal(err)
@@ -76,9 +85,27 @@ func init() {
 		}
 	}
 
-	conf.LogFile, err = os.OpenFile(filepath.Join(appDir, conf.LOG_FILE), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	conf.LogFile, err = os.OpenFile(filepath.Join(appDir, conf.FILE_LOG), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
+	}
+
+	jsonFile, err := os.Open(filepath.Join(appDir, conf.FILE_CONFIG))
+	if err == nil {
+		// Read config from json file
+		defer jsonFile.Close()
+		bValues, _ := ioutil.ReadAll(jsonFile)
+		json.Unmarshal(bValues, &ui.MyConfig)
+		ui.SetStatus("Reading config from json")
+	} else {
+		// Set default config (Sorry, time and date formats are the French way :)
+		ui.MyConfig.StartupScreen = ui.ModeShell
+		ui.MyConfig.FormatDate = "02/01/2006"
+		ui.MyConfig.FormatTime = "15:04:05"
+		ui.SetStatus("Set default config")
+		// Write config to json file
+		jsonFile, _ := json.MarshalIndent(ui.MyConfig, "", " ")
+		_ = ioutil.WriteFile(filepath.Join(appDir, conf.FILE_CONFIG), jsonFile, 0644)
 	}
 	/*
 		defer f.Close()
@@ -87,6 +114,7 @@ func init() {
 			panic(err)
 		}
 	*/
+	ui.SetStatus(fmt.Sprintf("Starting session #%s", ui.SessionID))
 	readSettings()
 	pm.CurrentView = pm.VIEW_PROCESS
 	pm.InitSignals()
@@ -102,19 +130,19 @@ func main() {
 	ui.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyF1:
-			cmd.SwitchToHelp()
+			ui.AddNewScreen(ui.ModeHelp, help.SelfInit, nil)
 		case tcell.KeyF2:
-			cmd.SwitchToShell()
+			ui.App.SetFocus(ui.TxtPrompt)
 		case tcell.KeyF3:
-			cmd.SwitchToFiles()
-		case tcell.KeyF4:
-			cmd.SwitchToProcess()
+			ui.CloseCurrentScreen()
 		case tcell.KeyF6:
-			cmd.SwitchToEditor()
-		case tcell.KeyF9:
-			cmd.SwitchToSQLite3()
+			ui.ShowPreviousScreen()
+		case tcell.KeyF7:
+			ui.ShowNextScreen()
+		case tcell.KeyF10:
+			ShowMainMenu()
 		case tcell.KeyF12:
-			ui.PgsApp.ShowPage("dlgQuit")
+			ui.PgsApp.SwitchToPage("dlgQuit")
 		case tcell.KeyCtrlC:
 			return nil
 		case tcell.KeyCtrlO:
@@ -153,19 +181,19 @@ func main() {
 			fm.ProceedFileSelect()
 			return nil
 		case tcell.KeyCtrlA:
-			fm.SelectAll()
+			fm.SelectAll(nil)
 			return nil
 		case tcell.KeyCtrlC:
-			fm.DoCopy()
+			fm.DoCopy(nil)
 			return nil
 		case tcell.KeyCtrlX:
-			fm.DoCut()
+			fm.DoCut(nil)
 			return nil
 		case tcell.KeyCtrlV:
-			fm.DoPaste()
+			fm.DoPaste(nil)
 			return nil
 		case tcell.KeyDelete:
-			fm.DoDelete()
+			fm.DoDelete(nil)
 			return nil
 		case tcell.KeyTab:
 			if ui.TxtPrompt.HasFocus() {
@@ -190,7 +218,7 @@ func main() {
 			pm.ShowMenu()
 			return nil
 		case tcell.KeyCtrlF:
-			pm.DoFindProcess()
+			pm.DoFindProcess(nil)
 			return nil
 		case tcell.KeyCtrlS:
 			pm.ShowMenuSort()
@@ -424,17 +452,107 @@ func main() {
 		return event
 	})
 
-	// ui.LblKeys.SetText("F1=Help F3=Files F4=Process F12=Exit")
 	ui.SetTitle(conf.APP_STRING)
 	ui.SetStatus("Welcome.")
-	cmd.SwitchToShell()
+	switch ui.MyConfig.StartupScreen {
+	case ui.ModeShell:
+		SwitchToShell(nil)
+	case ui.ModeFiles:
+		SwitchToFiles(nil)
+	case ui.ModeProcess:
+		SwitchToProcess(nil)
+	case ui.ModeTextEdit:
+		SwitchToTextEdit(nil)
+	case ui.ModeSQLite3:
+		SwitchToSQLite3(nil)
+	case ui.ModeHelp:
+		SwitchToHelp(nil)
+	case ui.ModeHexEdit:
+		SwitchToHexEdit(nil)
+	}
 	welcome()
 
 	go ui.UpdateTime()
 	go utils.GetCpuUsage()
-	if err := ui.App.SetRoot(ui.PgsApp, true).SetFocus(ui.FlxMain).EnableMouse(true).Run(); err != nil {
+	if err := ui.App.SetRoot(ui.PgsApp, true).SetFocus(ui.FlxShell).EnableMouse(true).Run(); err != nil {
 		panic(err)
 	}
+}
+
+// ****************************************************************************
+// ShowMainMenu()
+// ****************************************************************************
+func ShowMainMenu() {
+	MnuMain = MnuMain.New(" "+conf.APP_NAME+" ", ui.GetCurrentScreen(), ui.TxtPrompt)
+	// Dynamic options (screens currently open)
+	for i := 0; i < len(ui.ArrScreens); i++ {
+		if i == ui.IdxScreens {
+			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("✓ %s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true)
+		} else {
+			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("  %s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true)
+		}
+	}
+	MnuMain.AddSeparator()
+	// Fixed options
+	MnuMain.AddItem("mnuHelp", "Help", SwitchToHelp, nil, true)
+	MnuMain.AddItem("mnuShell", "Shell", SwitchToShell, nil, true)
+	MnuMain.AddItem("mnuFiles", "File Manager", SwitchToFiles, nil, true)
+	MnuMain.AddItem("mnuProcess", "Process and Services", SwitchToProcess, nil, true)
+	MnuMain.AddItem("mnuTextEdit", "Text Editor", SwitchToTextEdit, nil, true)
+	MnuMain.AddItem("mnuSQLite3", "SQLite3 Manager", SwitchToSQLite3, nil, true)
+	MnuMain.AddItem("mnuHexEdit", "Hexadecimal Editor", SwitchToHexEdit, nil, true)
+
+	ui.PgsApp.AddPage("dlgMainMenu", MnuMain.Popup(), true, false)
+	ui.PgsApp.ShowPage("dlgMainMenu")
+}
+
+// ****************************************************************************
+// SwitchToHelp(p any)
+// ****************************************************************************
+func SwitchToHelp(p any) {
+	ui.AddNewScreen(ui.ModeHelp, help.SelfInit, nil)
+}
+
+// ****************************************************************************
+// SwitchToShell(p any)
+// ****************************************************************************
+func SwitchToShell(p any) {
+	ui.AddNewScreen(ui.ModeShell, nil, nil)
+}
+
+// ****************************************************************************
+// SwitchToFiles(p any)
+// ****************************************************************************
+func SwitchToFiles(p any) {
+	ui.AddNewScreen(ui.ModeFiles, fm.SelfInit, nil)
+}
+
+// ****************************************************************************
+// SwitchToProcess(p any)
+// ****************************************************************************
+func SwitchToProcess(p any) {
+	ui.AddNewScreen(ui.ModeProcess, pm.SelfInit, cmd.CurrentUser)
+}
+
+// ****************************************************************************
+// SwitchToTextEdit(p any)
+// ****************************************************************************
+func SwitchToTextEdit(p any) {
+	ui.AddNewScreen(ui.ModeTextEdit, edit.SelfInit, nil)
+}
+
+// ****************************************************************************
+// SwitchToSQLite3(p any)
+// ****************************************************************************
+func SwitchToSQLite3(p any) {
+	ui.AddNewScreen(ui.ModeSQLite3, sq3.SelfInit, nil)
+}
+
+// ****************************************************************************
+// SwitchToHexEdit(p any)
+// ****************************************************************************
+func SwitchToHexEdit(p any) {
+	ui.AddNewScreen(ui.ModeHexEdit, nil, nil)
 }
 
 // ****************************************************************************
@@ -444,7 +562,7 @@ func main() {
 func appQuit() {
 	edit.CheckOpenFilesForSaving()
 	saveSettings()
-	ui.SetStatus("Quitting...")
+	ui.SetStatus(fmt.Sprintf("Quitting session #%s", ui.SessionID))
 	ui.App.Stop()
 	fmt.Printf("\n👻%s\n\n", conf.APP_STRING)
 }
@@ -455,7 +573,7 @@ func appQuit() {
 func readSettings() {
 	// Read commands history file
 	ui.SetStatus("Reading commands history")
-	fCmd, err := os.Open(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
+	fCmd, err := os.Open(filepath.Join(appDir, conf.FILE_HISTORY_CMD))
 	if err != nil {
 		return
 	}
@@ -466,7 +584,7 @@ func readSettings() {
 	}
 	// Read SQL history file
 	ui.SetStatus("Reading SQL history")
-	fSQL, err := os.Open(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
+	fSQL, err := os.Open(filepath.Join(appDir, conf.FILE_HISTORY_SQL))
 	if err != nil {
 		return
 	}
@@ -483,7 +601,7 @@ func readSettings() {
 func saveSettings() {
 	// Save commands history file
 	ui.SetStatus("Saving commands history")
-	fCmd, err := os.Create(filepath.Join(appDir, conf.HISTORY_CMD_FILE))
+	fCmd, err := os.Create(filepath.Join(appDir, conf.FILE_HISTORY_CMD))
 	if err != nil {
 		return
 	}
@@ -495,7 +613,7 @@ func saveSettings() {
 	wCmd.Flush()
 	// Save SQL history file
 	ui.SetStatus("Saving SQL history")
-	fSQL, err := os.Create(filepath.Join(appDir, conf.HISTORY_SQL_FILE))
+	fSQL, err := os.Create(filepath.Join(appDir, conf.FILE_HISTORY_SQL))
 	if err != nil {
 		return
 	}

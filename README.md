@@ -37,3 +37,4 @@
 * Ephemerids
 * Restic backup
 * PDF viewer
+* Mails

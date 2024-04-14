@@ -88,35 +88,34 @@ var pasteTarget string
 // SetFilesMenu()
 // ****************************************************************************
 func SetFilesMenu() {
-	MnuFiles = MnuFiles.New("Actions", "files", ui.TblFiles)
-	MnuFiles.AddItem("mnuEdit", "Edit", DoEdit, true)
+	MnuFiles = MnuFiles.New("Actions", ui.GetCurrentScreen(), ui.TblFiles)
+	MnuFiles.AddItem("mnuEdit", "Edit", DoEdit, nil, true)
 	// MnuFiles.AddItem("mnuOpen", "Open", DoDelete, true)
-	MnuFiles.AddItem("mnuSelect", "Select / Unselect All", SelectAll, true)
-	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, true)
-	MnuFiles.AddItem("mnuRename", "Rename", DoRename, true)
-	MnuFiles.AddItem("mnuCopy", "Copy", DoCopy, true)
-	MnuFiles.AddItem("mnuCut", "Cut", DoCut, true)
-	MnuFiles.AddItem("mnuPaste", "Paste", DoPaste, false)
-	MnuFiles.AddItem("mnuCreateFile", "New File", DoNewFile, true)
-	MnuFiles.AddItem("mnuCreateFolder", "New Folder", DoNewFolder, true)
+	MnuFiles.AddItem("mnuSelect", "Select / Unselect All", SelectAll, nil, true)
+	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, nil, true)
+	MnuFiles.AddItem("mnuRename", "Rename", DoRename, nil, true)
+	MnuFiles.AddItem("mnuCopy", "Copy", DoCopy, nil, true)
+	MnuFiles.AddItem("mnuCut", "Cut", DoCut, nil, true)
+	MnuFiles.AddItem("mnuPaste", "Paste", DoPaste, nil, false)
+	MnuFiles.AddItem("mnuCreateFile", "New File", DoNewFile, nil, true)
+	MnuFiles.AddItem("mnuCreateFolder", "New Folder", DoNewFolder, nil, true)
 	// MnuFiles.AddItem("mnuCreateLink", "Create Link", DoCreateLink, true)
-	MnuFiles.AddItem("mnuZip", "Zip", DoZip, true)
+	MnuFiles.AddItem("mnuZip", "Zip", DoZip, nil, true)
 	// MnuFiles.AddItem("mnuHashes", "Get Hashes", DoDelete, true)
 	// MnuFiles.AddItem("mnuEncrypt", "Encrypt", DoDelete, true)
 	// MnuFiles.AddItem("mnuTimestamp", "Timestamp", DoTimestamp, true)
-	MnuFiles.AddItem("mnuSnapshot", "Snapshot", DoSnapshot, true)
-	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, true)
+	MnuFiles.AddItem("mnuSnapshot", "Snapshot", DoSnapshot, nil, true)
+	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, nil, true)
 	ui.PgsApp.AddPage("dlgFileAction", MnuFiles.Popup(), true, false)
 
-	MnuFilesSort = MnuFilesSort.New("Sort by", "files", ui.TblFiles)
-	MnuFilesSort.AddItem("mnuSortNameA", "Name Ascending", doSortNameA, false)
-	MnuFilesSort.AddItem("mnuSortNameD", "Name Descending", doSortNameD, true)
-	MnuFilesSort.AddItem("mnuSortSizeA", "Size Ascending", doSortSizeA, true)
-	MnuFilesSort.AddItem("mnuSortSizeD", "Size Descending", doSortSizeD, true)
-	MnuFilesSort.AddItem("mnuSortTimeA", "Time Ascending", doSortTimeA, true)
-	MnuFilesSort.AddItem("mnuSortTimeD", "Time Descending", doSortTimeD, true)
+	MnuFilesSort = MnuFilesSort.New("Sort by", ui.GetCurrentScreen(), ui.TblFiles)
+	MnuFilesSort.AddItem("mnuSortNameA", "Name Ascending", doSortNameA, nil, false)
+	MnuFilesSort.AddItem("mnuSortNameD", "Name Descending", doSortNameD, nil, true)
+	MnuFilesSort.AddItem("mnuSortSizeA", "Size Ascending", doSortSizeA, nil, true)
+	MnuFilesSort.AddItem("mnuSortSizeD", "Size Descending", doSortSizeD, nil, true)
+	MnuFilesSort.AddItem("mnuSortTimeA", "Time Ascending", doSortTimeA, nil, true)
+	MnuFilesSort.AddItem("mnuSortTimeD", "Time Descending", doSortTimeD, nil, true)
 	ui.PgsApp.AddPage("dlgFileSort", MnuFilesSort.Popup(), true, false)
-
 }
 
 // ****************************************************************************
@@ -160,7 +159,7 @@ func ShowMenuSort() {
 // ****************************************************************************
 // DoDelete()
 // ****************************************************************************
-func DoDelete() {
+func DoDelete(p any) {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		if ui.TblFiles.GetCell(idx, 3).Text != conf.LABEL_PARENT_FOLDER {
@@ -171,7 +170,7 @@ func DoDelete() {
 					"Are you sure you want to delete this file ?", // Message
 					DeleteFile,
 					idx,
-					"files", ui.TblFiles) // Focus return
+					ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 				ui.PgsApp.AddPage("dlgConfirmDeleteFile", DlgConfirm.Popup(), true, false)
 				ui.PgsApp.ShowPage("dlgConfirmDeleteFile")
 			} else {
@@ -179,7 +178,7 @@ func DoDelete() {
 					"Are you sure you want to delete this folder and all its content ?", // Message
 					DeleteFolder,
 					idx,
-					"files", ui.TblFiles) // Focus return
+					ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 				ui.PgsApp.AddPage("dlgConfirmDeleteFolder", DlgConfirm.Popup(), true, false)
 				ui.PgsApp.ShowPage("dlgConfirmDeleteFolder")
 			}
@@ -191,7 +190,7 @@ func DoDelete() {
 			"Are you sure you want to delete all of these files ?", // Message
 			DeleteSelection,
 			0,
-			"files", ui.TblFiles) // Focus return
+			ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 		ui.PgsApp.AddPage("dlgConfirmDeleteSelection", DlgConfirm.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgConfirmDeleteSelection")
 	}
@@ -277,9 +276,9 @@ func DeleteSelection(button dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoRename()
+// DoRename(p any)
 // ****************************************************************************
-func DoRename() {
+func DoRename(p any) {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
@@ -290,7 +289,7 @@ func DoRename() {
 				filepath.Base(fName),
 				RenameFile,
 				idx,
-				"files", ui.TblFiles) // Focus return
+				ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 			ui.PgsApp.AddPage("dlgConfirmRenameFile", DlgConfirm.Popup(), true, false)
 			ui.PgsApp.ShowPage("dlgConfirmRenameFile")
 		} else {
@@ -299,7 +298,7 @@ func DoRename() {
 				filepath.Base(fName),
 				RenameFolder,
 				idx,
-				"files", ui.TblFiles) // Focus return
+				ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 			ui.PgsApp.AddPage("dlgConfirmRenameFolder", DlgConfirm.Popup(), true, false)
 			ui.PgsApp.ShowPage("dlgConfirmRenameFolder")
 		}
@@ -353,9 +352,9 @@ func RenameFolder(button dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoTimestamp()
+// DoTimestamp(p any)
 // ****************************************************************************
-func DoTimestamp() {
+func DoTimestamp(p any) {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
@@ -392,9 +391,9 @@ func DoTimestamp() {
 }
 
 // ****************************************************************************
-// DoSnapshot()
+// DoSnapshot(p any)
 // ****************************************************************************
-func DoSnapshot() {
+func DoSnapshot(p any) {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
@@ -437,9 +436,9 @@ func DoSnapshot() {
 }
 
 // ****************************************************************************
-// DoZip()
+// DoZip(p any)
 // ****************************************************************************
-func DoZip() {
+func DoZip(p any) {
 	if len(sel) == 0 {
 		idx, _ := ui.TblFiles.GetSelection()
 		targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
@@ -484,30 +483,30 @@ func DoZip() {
 }
 
 // ****************************************************************************
-// DoNewFile()
+// DoNewFile(p any)
 // ****************************************************************************
-func DoNewFile() {
+func DoNewFile(p any) {
 	DlgConfirm = DlgConfirm.Input("Create New File", // Title
 		"Please, enter the name for this new file :", // Message
 		"new_file",
 		CreateNewFile,
 		0,
-		"files", ui.TblFiles) // Focus return
+		ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 	ui.PgsApp.AddPage("dlgCreateNewFile", DlgConfirm.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgCreateNewFile")
 
 }
 
 // ****************************************************************************
-// DoNewFolder()
+// DoNewFolder(p any)
 // ****************************************************************************
-func DoNewFolder() {
+func DoNewFolder(p any) {
 	DlgConfirm = DlgConfirm.Input("Create New Folder", // Title
 		"Please, enter the name for this new folder :", // Message
 		"new_folder",
 		CreateNewFolder,
 		0,
-		"files", ui.TblFiles) // Focus return
+		ui.GetCurrentScreen(), ui.TblFiles) // Focus return
 	ui.PgsApp.AddPage("dlgCreateNewFolder", DlgConfirm.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgCreateNewFolder")
 
@@ -561,9 +560,9 @@ func CreateNewFolder(button dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoCopy()
+// DoCopy(p any)
 // ****************************************************************************
-func DoCopy() {
+func DoCopy(p any) {
 	idx, _ := ui.TblFiles.GetSelection()
 	if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
@@ -594,9 +593,9 @@ func DoCopy() {
 }
 
 // ****************************************************************************
-// DoCut()
+// DoCut(p any)
 // ****************************************************************************
-func DoCut() {
+func DoCut(p any) {
 	idx, _ := ui.TblFiles.GetSelection()
 	if ui.TblFiles.GetCell(idx, 0).Text == "   " {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
@@ -627,9 +626,9 @@ func DoCut() {
 }
 
 // ****************************************************************************
-// DoPaste()
+// DoPaste(p any)
 // ****************************************************************************
-func DoPaste() {
+func DoPaste(p any) {
 	var fName string
 	if conf.Cwd == pasteSource {
 		ui.SetStatus("Can't paste into the same folder")
@@ -680,9 +679,9 @@ func DoPaste() {
 }
 
 // ****************************************************************************
-// DoSwitchHiddenFiles()
+// DoSwitchHiddenFiles(p any)
 // ****************************************************************************
-func DoSwitchHiddenFiles() {
+func DoSwitchHiddenFiles(p any) {
 	Hidden = !Hidden
 	RefreshMe()
 }
@@ -692,7 +691,6 @@ func DoSwitchHiddenFiles() {
 // ****************************************************************************
 func ShowFiles() {
 	// ui.TxtSelection.Clear()
-	ui.PgsApp.SwitchToPage("files")
 	files, err := os.ReadDir(conf.Cwd)
 	if err != nil {
 		ui.SetStatus(err.Error())
@@ -850,9 +848,9 @@ func SortFileModDescend(files []fs.DirEntry) {
 }
 
 // ****************************************************************************
-// doSortNameA()
+// doSortNameA(p any)
 // ****************************************************************************
-func doSortNameA() {
+func doSortNameA(p any) {
 	sortColumn = SORT_NAME
 	sortOrder = SORT_ASCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", false)
@@ -865,9 +863,9 @@ func doSortNameA() {
 }
 
 // ****************************************************************************
-// doSortNameD()
+// doSortNameD(p any)
 // ****************************************************************************
-func doSortNameD() {
+func doSortNameD(p any) {
 	sortColumn = SORT_NAME
 	sortOrder = SORT_DESCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", true)
@@ -880,9 +878,9 @@ func doSortNameD() {
 }
 
 // ****************************************************************************
-// doSortSizeA()
+// doSortSizeA(p any)
 // ****************************************************************************
-func doSortSizeA() {
+func doSortSizeA(p any) {
 	sortColumn = SORT_SIZE
 	sortOrder = SORT_ASCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", true)
@@ -895,9 +893,9 @@ func doSortSizeA() {
 }
 
 // ****************************************************************************
-// doSortSizeD()
+// doSortSizeD(p any)
 // ****************************************************************************
-func doSortSizeD() {
+func doSortSizeD(p any) {
 	sortColumn = SORT_SIZE
 	sortOrder = SORT_DESCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", true)
@@ -910,9 +908,9 @@ func doSortSizeD() {
 }
 
 // ****************************************************************************
-// doSortTimeA()
+// doSortTimeA(p any)
 // ****************************************************************************
-func doSortTimeA() {
+func doSortTimeA(p any) {
 	sortColumn = SORT_TIME
 	sortOrder = SORT_ASCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", true)
@@ -925,9 +923,9 @@ func doSortTimeA() {
 }
 
 // ****************************************************************************
-// doSortTimeD()
+// doSortTimeD(p any)
 // ****************************************************************************
-func doSortTimeD() {
+func doSortTimeD(p any) {
 	sortColumn = SORT_TIME
 	sortOrder = SORT_DESCENDING
 	MnuFilesSort.SetEnabled("mnuSortNameA", true)
@@ -1160,9 +1158,9 @@ func focusOn(fName string) {
 }
 
 // ****************************************************************************
-// SelectAll()
+// SelectAll(p any)
 // ****************************************************************************
-func SelectAll() {
+func SelectAll(p any) {
 	if len(sel) == 0 {
 		for idx := 1; idx < ui.TblFiles.GetRowCount(); idx++ {
 			if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
@@ -1224,9 +1222,9 @@ func SelectAll() {
 }
 
 // ****************************************************************************
-// DoEdit()
+// DoEdit(p any)
 // ****************************************************************************
-func DoEdit() {
+func DoEdit(p any) {
 	idx, _ := ui.TblFiles.GetSelection()
 	fName := filepath.Join(conf.Cwd, ui.TblFiles.GetCell(idx, 2).Text)
 	mtype, xtype := preview.DisplayFilePreview(fName)
@@ -1237,4 +1235,14 @@ func DoEdit() {
 		sq3.OpenDB(fName)
 		sq3.SwitchToSQLite3()
 	}
+}
+
+// ****************************************************************************
+// SelfInit()
+// ****************************************************************************
+func SelfInit(a any) {
+	SetFilesMenu()
+	ShowFiles()
+	ui.App.Sync()
+	ui.App.SetFocus(ui.TblFiles)
 }

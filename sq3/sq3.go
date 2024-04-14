@@ -19,11 +19,13 @@ import (
 	"gosh/edit"
 	"gosh/menu"
 	"gosh/ui"
+	"gosh/utils"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/gdamore/tcell/v2"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rivo/tview"
@@ -172,7 +174,7 @@ func DoCloseDB() {
 		"This file has been modified. Do you want to save it ?", // Message
 		confirmCloseDB,
 		0,
-		"sqlite3", ui.TxtPrompt) // Focus return
+		ui.GetCurrentScreen(), ui.TxtPrompt) // Focus return
 	ui.PgsApp.AddPage("dlgCloseDB", DlgCloseDB.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgCloseDB")
 }
@@ -195,7 +197,7 @@ func DoOpenDB(path string) {
 		path,
 		confirmOpenDB,
 		0,
-		"sqlite3", ui.TxtPrompt) // Focus return
+		ui.GetCurrentScreen(), ui.TxtPrompt) // Focus return
 	ui.PgsApp.AddPage("dlgOpenDB", DlgOpenDB.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgOpenDB")
 }
@@ -394,11 +396,11 @@ func doSelect(q string) {
 // ****************************************************************************
 func SetSQLMenu() {
 	MnuSQL = MnuSQL.New("Actions", "sqlite3", ui.TblSQLOutput)
-	MnuSQL.AddItem("mnuExportCell", "Export cell", DoExportCell, true)
-	MnuSQL.AddItem("mnuExportRow", "Export row to CSV", DoExportRow, true)
-	MnuSQL.AddItem("mnuExportAll", "Export all to CSV", DoExportAll, true)
-	MnuSQL.AddItem("mnuExportStructSQL", "Export structure to SQL script", DoExportAll, true)
-	MnuSQL.AddItem("mnuExportAllSQL", "Export all to SQL script", DoExportAll, true)
+	MnuSQL.AddItem("mnuExportCell", "Export cell", DoExportCell, nil, true)
+	MnuSQL.AddItem("mnuExportRow", "Export row to CSV", DoExportRow, nil, true)
+	MnuSQL.AddItem("mnuExportAll", "Export all to CSV", DoExportAll, nil, true)
+	MnuSQL.AddItem("mnuExportStructSQL", "Export structure to SQL script", DoExportAll, nil, true)
+	MnuSQL.AddItem("mnuExportAllSQL", "Export all to SQL script", DoExportAll, nil, true)
 	ui.PgsApp.AddPage("dlgMenuAction", MnuSQL.Popup(), true, false)
 }
 
@@ -410,9 +412,9 @@ func ShowMenu() {
 }
 
 // ****************************************************************************
-// DoExportRow()
+// DoExportRow(p any)
 // ****************************************************************************
-func DoExportRow() {
+func DoExportRow(p any) {
 	r, _ := ui.TblSQLOutput.GetSelection()
 	if r > 0 {
 		f, err := os.CreateTemp(conf.Cwd, conf.NEW_FILE_TEMPLATE)
@@ -437,9 +439,9 @@ func DoExportRow() {
 }
 
 // ****************************************************************************
-// DoExportAll()
+// DoExportAll(p any)
 // ****************************************************************************
-func DoExportAll() {
+func DoExportAll(p any) {
 	f, err := os.CreateTemp(conf.Cwd, conf.NEW_FILE_TEMPLATE)
 	if err == nil {
 		defer f.Close()
@@ -467,9 +469,9 @@ func DoExportAll() {
 }
 
 // ****************************************************************************
-// DoExportCell()
+// DoExportCell(p any)
 // ****************************************************************************
-func DoExportCell() {
+func DoExportCell(p any) {
 	r, c := ui.TblSQLOutput.GetSelection()
 	if r > 0 {
 		f, err := os.CreateTemp(conf.Cwd, conf.NEW_FILE_TEMPLATE)
@@ -496,6 +498,84 @@ func SwitchToSQLite3() {
 	ui.CurrentMode = ui.ModeSQLite3
 	ui.SetTitle("SQLite3")
 	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
-	ui.PgsApp.SwitchToPage("sqlite3")
+	ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+	scr := ui.GetScreenFromTitle("SQLite3")
+	if scr == "NIL" {
+		// cmd.AddNewScreen(ui.ModeSQLite3, sq3.SelfInit(), nil)
+		var screen ui.MyScreen
+		screen.ID, _ = utils.RandomHex(3)
+		screen.Mode = ui.ModeSQLite3
+		screen.Title = "SQLite3"
+		screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
+		ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxSQL, true, true)
+		scr = screen.Title + "_" + screen.ID
+		ui.ArrScreens = append(ui.ArrScreens, screen)
+		ui.IdxScreens++
+	}
+	ui.PgsApp.SwitchToPage(scr) // ???
 	ui.App.SetFocus(ui.TxtPrompt)
+	ui.SetStatus(fmt.Sprintf("Switching to [%s]", scr))
+}
+
+// ****************************************************************************
+// SelfInit()
+// ****************************************************************************
+func SelfInit(a any) {
+	if ui.CurrentMode == ui.ModeFiles {
+		idx, _ := ui.TblFiles.GetSelection()
+		fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+		xtype, _ := mimetype.DetectFile(fName)
+		if strings.HasSuffix(xtype.String(), "sqlite3") {
+			// Is there an open database ?
+			if CurrentDB == nil {
+				// no, then open the targeted database
+				err := OpenDB(fName)
+				if err == nil {
+					ui.CurrentMode = ui.ModeSQLite3
+					ui.SetTitle("SQLite3")
+					ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
+					scr := ui.GetScreenFromTitle("SQLite3")
+					if scr == "NIL" {
+						var screen ui.MyScreen
+						screen.ID, _ = utils.RandomHex(3)
+						screen.Mode = ui.ModeSQLite3
+						screen.Title = "SQLite3"
+						screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
+						ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxSQL, true, true)
+						scr = screen.Title + "_" + screen.ID
+					}
+					ui.PgsApp.SwitchToPage(scr) // ???
+					ui.App.SetFocus(ui.TxtPrompt)
+					ui.SetStatus(fmt.Sprintf("Switching to [%s]", scr))
+				} else {
+					ui.CurrentMode = ui.ModeSQLite3
+					ui.SetTitle("SQLite3")
+					ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
+					ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+					ui.App.SetFocus(ui.TxtPrompt)
+					ui.SetStatus(err.Error())
+				}
+			} else {
+				// attach the targeted database to the current database
+				DoExec(fmt.Sprintf("attach database '%s' as %s", fName, utils.FilenameWithoutExtension(filepath.Base(fName))))
+				ui.CurrentMode = ui.ModeSQLite3
+				ui.SetTitle("SQLite3")
+				ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
+				ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+				ui.App.SetFocus(ui.TxtPrompt)
+			}
+		} else {
+			ui.CurrentMode = ui.ModeSQLite3
+			ui.SetTitle("SQLite3")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
+			ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+			ui.App.SetFocus(ui.TxtPrompt)
+		}
+	} else {
+		ui.CurrentMode = ui.ModeSQLite3
+		ui.SetTitle("SQLite3")
+		ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
+		ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+		ui.App.SetFocus(ui.TxtPrompt)
+	}
 }

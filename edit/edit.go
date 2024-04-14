@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -62,8 +63,18 @@ var (
 func SwitchToEditor(fName string) {
 	ui.CurrentMode = ui.ModeTextEdit
 	ui.SetTitle("Editor")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F9=SQLite3 F12=Exit\nCtrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close")
-	ui.PgsApp.SwitchToPage("editor")
+	ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close")
+	scr := ui.GetScreenFromTitle("Editor")
+	if scr == "NIL" {
+		var screen ui.MyScreen
+		screen.ID, _ = utils.RandomHex(3)
+		screen.Mode = ui.ModeTextEdit
+		screen.Title = "Editor"
+		screen.Keys = "Ctrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close"
+		ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxEditor, true, true)
+		scr = screen.Title + "_" + screen.ID
+	}
+	ui.PgsApp.SwitchToPage(scr) // ???
 	OpenFile(fName)
 	ShowTreeDir(filepath.Dir(fName))
 	ui.App.SetFocus(ui.EdtMain)
@@ -124,7 +135,7 @@ func SaveFileAs() {
 		currentFile.fName,
 		confirmSaveAs,
 		0,
-		"editor", ui.EdtMain) // Focus return
+		ui.GetCurrentScreen(), ui.EdtMain) // Focus return
 	ui.PgsApp.AddPage("dlgSaveFileAs", DlgSaveFileAs.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgSaveFileAs")
 
@@ -260,7 +271,7 @@ func proposeToSaveFile(idx int, flow int) {
 		"This file has been modified. Do you want to save it ?", // Message
 		confirmSave,
 		idx,
-		"editor", ui.EdtMain) // Focus return
+		ui.GetCurrentScreen(), ui.EdtMain) // Focus return
 	ui.PgsApp.AddPage("dlgSaveFile", DlgSaveFile.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgSaveFile")
 }
@@ -429,4 +440,26 @@ func ShowTreeDir(rootDir string) {
 			node.SetExpanded(!node.IsExpanded())
 		}
 	})
+}
+
+// ****************************************************************************
+// SelfInit()
+// ****************************************************************************
+func SelfInit(a any) {
+	if ui.CurrentMode == ui.ModeFiles {
+		idx, _ := ui.TblFiles.GetSelection()
+		fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+		mtype := utils.GetMimeType(fName)
+		if len(mtype) > 3 {
+			if mtype[:4] == "text" {
+				SwitchToEditor(fName)
+			} else {
+				NewFileOrLastFile(conf.Cwd)
+			}
+		} else {
+			NewFileOrLastFile(conf.Cwd)
+		}
+	} else {
+		NewFileOrLastFile(conf.Cwd)
+	}
 }

@@ -13,6 +13,7 @@ package utils
 import (
 	"archive/zip"
 	"bufio"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -442,4 +443,15 @@ func IsAsciiPrintable(s string) bool {
 		}
 	}
 	return true
+}
+
+// ****************************************************************************
+// RandomHex()
+// ****************************************************************************
+func RandomHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }

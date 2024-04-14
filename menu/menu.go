@@ -15,6 +15,7 @@ package menu
 // ****************************************************************************
 import (
 	"gosh/ui"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -26,7 +27,8 @@ import (
 type MenuItem struct {
 	Name    string
 	Label   string
-	Done    func()
+	Done    func(any)
+	Param   any
 	Enabled bool
 }
 
@@ -43,11 +45,12 @@ type Menu struct {
 // ****************************************************************************
 // New() MenuItem
 // ****************************************************************************
-func (mi *MenuItem) New(name string, label string, done func(), enabled bool) *MenuItem {
+func (mi *MenuItem) New(name string, label string, done func(any), param any, enabled bool) *MenuItem {
 	mi = &MenuItem{
 		Name:    name,
 		Label:   label,
 		Done:    done,
+		Param:   param,
 		Enabled: enabled,
 	}
 	return mi
@@ -69,9 +72,18 @@ func (m *Menu) New(title string, parent string, focus tview.Primitive) *Menu {
 // ****************************************************************************
 // AddItem() Menu
 // ****************************************************************************
-func (m *Menu) AddItem(name string, label string, event func(), enabled bool) {
+func (m *Menu) AddItem(name string, label string, event func(any), param any, enabled bool) {
 	var item *MenuItem
-	item = item.New(name, label, event, enabled)
+	item = item.New(name, label, event, param, enabled)
+	m.items = append(m.items, *item)
+}
+
+// ****************************************************************************
+// AddSeparator() Menu
+// ****************************************************************************
+func (m *Menu) AddSeparator() {
+	var item *MenuItem
+	item = item.New("SEPARATOR", "-", nil, nil, false)
 	m.items = append(m.items, *item)
 }
 
@@ -120,8 +132,16 @@ func (m *Menu) refresh() {
 			m.width = len(item.Label)
 		}
 	}
+	// Add some space around
 	m.width = m.width + 2
 	m.height = m.height + 2
+	// Adapt length separator (if any) to the menu width
+	for i, item := range m.items {
+		if item.Name == "SEPARATOR" {
+			item.Label = " " + strings.Repeat("─", m.width-4)
+			m.Table.SetCell(i, 0, tview.NewTableCell(item.Label).SetTextColor(tcell.ColorGray))
+		}
+	}
 }
 
 // ****************************************************************************
@@ -136,7 +156,7 @@ func (m *Menu) Popup() tview.Primitive {
 			if m.items[idx].Enabled {
 				ui.PgsApp.SwitchToPage(m.parent)
 				ui.App.SetFocus(m.focus)
-				m.items[idx].Done()
+				m.items[idx].Done(m.items[idx].Param)
 			}
 			return nil
 		case tcell.KeyEsc:

@@ -11,9 +11,11 @@
 package ui
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"gosh/conf"
+	"gosh/utils"
 	"sort"
 	"strings"
 	"time"
@@ -24,11 +26,13 @@ import (
 )
 
 type Fn func()
+type FnAny func(any)
 
-type Mode int64
+type Mode int
 
 const (
 	ModeShell Mode = iota
+	ModeHelp
 	ModeFiles
 	ModeTextEdit
 	ModeHexEdit
@@ -37,13 +41,80 @@ const (
 	ModeSQLite3
 )
 
+// ****************************************************************************
+// UnmarshalText()
+// ****************************************************************************
+func (m *Mode) UnmarshalText(b []byte) error {
+	str := strings.Trim(string(b), `"`)
+
+	switch {
+	case str == "ModeShell":
+		*m = ModeShell
+	case str == "ModeHelp":
+		*m = ModeHelp
+	case str == "ModeFiles":
+		*m = ModeFiles
+	case str == "ModeTextEdit":
+		*m = ModeTextEdit
+	case str == "ModeHexEdit":
+		*m = ModeHexEdit
+	case str == "ModeProcess":
+		*m = ModeProcess
+	case str == "ModeNetwork":
+		*m = ModeNetwork
+	case str == "ModeSQLite3":
+		*m = ModeSQLite3
+	}
+
+	return nil
+}
+
+// ****************************************************************************
+// String()
+// ****************************************************************************
+func (m Mode) String() string {
+
+	switch m {
+	case ModeShell:
+		return "ModeShell"
+	case ModeHelp:
+		return "ModeHelp"
+	case ModeFiles:
+		return "ModeFiles"
+	case ModeTextEdit:
+		return "ModeTextEdit"
+	case ModeHexEdit:
+		return "ModeHexEdit"
+	case ModeProcess:
+		return "ModeProcess"
+	case ModeNetwork:
+		return "ModeNetwork"
+	case ModeSQLite3:
+		return "ModeSQLite3"
+	}
+	return "?"
+}
+
+type MyScreen struct {
+	ID    string
+	Title string
+	Page  *tview.Pages
+	Keys  string
+	Mode  Mode
+	Init  FnAny
+	Param any
+}
+
 var (
+	SessionID      string
+	IdxScreens     int
+	ArrScreens     []MyScreen
 	CurrentMode    Mode
 	lblTime        *tview.TextView
 	lblDate        *tview.TextView
 	LblKeys        *tview.TextView
 	App            *tview.Application
-	FlxMain        *tview.Flex
+	FlxShell       *tview.Flex
 	FlxFiles       *tview.Flex
 	FlxProcess     *tview.Flex
 	FlxHelp        *tview.Flex
@@ -58,9 +129,11 @@ var (
 	lblTitle       *tview.TextView
 	lblStatus      *tview.TextView
 	LblHostname    *tview.TextView
+	LblScreen      *tview.TextView
+	LblPID         *tview.TextView
 	LblRC          *tview.TextView
 	PgsApp         *tview.Pages
-	dlgQuit        *tview.Modal
+	DlgQuit        *tview.Modal
 	TblFiles       *tview.Table
 	TblProcess     *tview.Table
 	TxtPath        *tview.TextView
@@ -79,7 +152,18 @@ var (
 	TrvSQLDatabase *tview.TreeView
 	TxtHexName     *tview.TextView
 	TblHexEdit     *tview.Table
+	CmdOutput      string
+	CmdOutputOld   string
+	ScanCmd        *bufio.Scanner
 )
+
+type Config struct {
+	StartupScreen Mode   `json:"startup_screen"`
+	FormatDate    string `json:"format_date"`
+	FormatTime    string `json:"format_time"`
+}
+
+var MyConfig Config
 
 // ****************************************************************************
 // setUI()
@@ -110,6 +194,16 @@ func SetUI(fQuit Fn, hostname string) {
 	lblStatus.SetBorder(false)
 	lblStatus.SetBackgroundColor(tcell.ColorDarkGreen)
 	lblStatus.SetTextColor(tcell.ColorWheat)
+
+	LblScreen = tview.NewTextView()
+	LblScreen.SetBorder(false)
+	LblScreen.SetBackgroundColor(tcell.ColorDarkGreen)
+	LblScreen.SetTextColor(tcell.ColorWheat)
+
+	LblPID = tview.NewTextView()
+	LblPID.SetBorder(false)
+	LblPID.SetBackgroundColor(tcell.ColorDarkGreen)
+	LblPID.SetTextColor(tcell.ColorWheat)
 
 	LblRC = tview.NewTextView()
 	LblRC.SetBorder(false)
@@ -220,7 +314,7 @@ func SetUI(fQuit Fn, hostname string) {
 	//*************************************************************************
 	// Main Layout (Shell)
 	//*************************************************************************
-	FlxMain = tview.NewFlex().SetDirection(tview.FlexRow).
+	FlxShell = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tview.NewFlex().
 			AddItem(lblDate, 10, 0, false).
 			AddItem(lblTitle, 0, 1, false).
@@ -231,7 +325,9 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblPID, 12, 0, false).
+			AddItem(LblRC, 8, 0, false).
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Help Layout
@@ -247,7 +343,7 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Files Layout
@@ -270,7 +366,7 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	TblFiles.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
@@ -301,7 +397,7 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Editor Layout
@@ -323,7 +419,7 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// SQLite3 Layout
@@ -345,7 +441,7 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// HexaEditor Layout
@@ -367,33 +463,22 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblRC, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Misc
 	//*************************************************************************
-	dlgQuit = tview.NewModal().
+	DlgQuit = tview.NewModal().
 		SetText("Do you want to quit the application ?").
 		AddButtons([]string{"Quit", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "Quit" {
 				fQuit()
 			} else {
-				// TODO : Get the real previous page and go back to it
-				SetTitle("Shell")
-				LblKeys.SetText("F1=Help F3=Files F12=Exit")
-				PgsApp.SwitchToPage("main")
+				PgsApp.SwitchToPage(GetCurrentScreen())
 			}
 		})
-
-	PgsApp.AddPage("main", FlxMain, true, true)
-	PgsApp.AddPage("help", FlxHelp, true, false)
-	PgsApp.AddPage("files", FlxFiles, true, false)
-	PgsApp.AddPage("process", FlxProcess, true, false)
-	PgsApp.AddPage("editor", FlxEditor, true, false)
-	PgsApp.AddPage("sqlite3", FlxSQL, true, false)
-	PgsApp.AddPage("hexedit", FlxHexEdit, true, false)
-	PgsApp.AddPage("dlgQuit", dlgQuit, false, false)
+	IdxScreens = -1
 }
 
 // ****************************************************************************
@@ -402,7 +487,7 @@ func SetUI(fQuit Fn, hostname string) {
 // ****************************************************************************
 func currentDateString() string {
 	d := time.Now()
-	return fmt.Sprint(d.Format("02/01/2006"))
+	return fmt.Sprint(d.Format(MyConfig.FormatDate))
 }
 
 // ****************************************************************************
@@ -411,7 +496,7 @@ func currentDateString() string {
 // ****************************************************************************
 func currentTimeString() string {
 	t := time.Now()
-	return fmt.Sprint(t.Format("15:04:05"))
+	return fmt.Sprint(t.Format(MyConfig.FormatTime))
 }
 
 // ****************************************************************************
@@ -420,13 +505,19 @@ func currentTimeString() string {
 // ****************************************************************************
 func UpdateTime() {
 	for {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 		App.QueueUpdateDraw(func() {
 			lblDate.SetText(currentDateString())
 			lblTime.SetText(currentTimeString())
-			TxtConsole.SetText(TxtConsole.GetText(false) + string(StdoutBuf.Bytes()))
-			StdoutBuf.Reset()
+			// TxtConsole.SetText(TxtConsole.GetText(false) + string(StdoutBuf.Bytes()))
+			// StdoutBuf.Reset()
 			// TxtConsole.SetText(string(StderrBuf.Bytes()))
+			/*
+				if CmdOutput != CmdOutputOld {
+					TxtConsole.SetText(TxtConsole.GetText(false) + CmdOutput + "\n")
+				}
+				CmdOutputOld = CmdOutput
+			*/
 		})
 	}
 }
@@ -448,18 +539,18 @@ func GetTitle() string {
 }
 
 // ****************************************************************************
-// setStatus()
-// setStatus displays the status message during a specific time
+// SetStatus()
+// SetStatus displays the status message during a specific time
 // ****************************************************************************
-func SetStatus(t string) {
-	lblStatus.SetText(t)
+func SetStatus(txt string) {
+	lblStatus.SetText(txt)
 	DurationOfTime := time.Duration(conf.STATUS_MESSAGE_DURATION) * time.Second
 	f := func() {
 		lblStatus.SetText("")
 	}
 	time.AfterFunc(DurationOfTime, f)
 	current := time.Now()
-	conf.LogFile.WriteString(fmt.Sprintf("%s : %s\n", current.Format("20060102-150405"), t))
+	conf.LogFile.WriteString(fmt.Sprintf("%s [%s] : %s\n", current.Format("20060102-150405"), SessionID, txt))
 }
 
 // ****************************************************************************
@@ -512,4 +603,133 @@ func DisplayMap(tv *tview.TextView, m map[string]string) {
 // ****************************************************************************
 func PromptInput(msg string, choice string) {
 	TxtPrompt.SetText(msg, true)
+}
+
+// ****************************************************************************
+// RemoveScreen()
+// ****************************************************************************
+func RemoveScreen(s []MyScreen, i int) []MyScreen {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+// ****************************************************************************
+// GetCurrentScreen()
+// ****************************************************************************
+func GetCurrentScreen() string {
+	return (ArrScreens[IdxScreens].Title + "_" + ArrScreens[IdxScreens].ID)
+}
+
+// ****************************************************************************
+// GetScreenFromTitle()
+// ****************************************************************************
+func GetScreenFromTitle(t string) string {
+	for i := 0; i < len(ArrScreens); i++ {
+		if ArrScreens[i].Title == t {
+			return (ArrScreens[i].Title + "_" + ArrScreens[i].ID)
+		}
+	}
+	return "NIL"
+}
+
+// ****************************************************************************
+// CloseCurrentScreen()
+// ****************************************************************************
+func CloseCurrentScreen() {
+	ArrScreens = RemoveScreen(ArrScreens, IdxScreens)
+	if len(ArrScreens) == 0 {
+		IdxScreens = -1
+		AddNewScreen(ModeShell, nil, nil)
+	} else {
+		ShowPreviousScreen()
+	}
+	SetStatus("Closing current screen")
+}
+
+// ****************************************************************************
+// ShowPreviousScreen()
+// ****************************************************************************
+func ShowPreviousScreen() {
+	if IdxScreens > 0 {
+		IdxScreens--
+	} else {
+		IdxScreens = len(ArrScreens) - 1
+	}
+	ShowScreen(IdxScreens)
+	SetStatus("Switching to previous screen")
+}
+
+// ****************************************************************************
+// ShowNextScreen()
+// ****************************************************************************
+func ShowNextScreen() {
+	if IdxScreens < len(ArrScreens)-1 {
+		IdxScreens++
+	} else {
+		IdxScreens = 0
+	}
+	ShowScreen(IdxScreens)
+	SetStatus("Switching to next screen")
+}
+
+// ****************************************************************************
+// ShowScreen()
+// ****************************************************************************
+func ShowScreen(idx any) {
+	var screen MyScreen = ArrScreens[idx.(int)]
+	SetTitle(screen.Title)
+	CurrentMode = screen.Mode
+	LblKeys.SetText(conf.FKEY_LABELS + "\n" + screen.Keys)
+	PgsApp.SwitchToPage(screen.Title + "_" + screen.ID)
+	IdxScreens = idx.(int)
+	LblScreen.SetText(fmt.Sprintf("%d/%d", IdxScreens+1, len(ArrScreens)))
+}
+
+// ****************************************************************************
+// AddNewScreen()
+// ****************************************************************************
+func AddNewScreen(mode Mode, selfInit FnAny, param any) {
+	var screen MyScreen
+	screen.ID, _ = utils.RandomHex(3)
+	screen.Mode = mode
+	screen.Init = selfInit
+	screen.Param = param
+
+	switch mode {
+	case ModeFiles:
+		screen.Title = "Files"
+		screen.Keys = "Del=Delete Ins=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort"
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxFiles, true, true)
+	case ModeHexEdit:
+		screen.Title = "Hexedit"
+		screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxHexEdit, true, true)
+	case ModeProcess:
+		screen.Title = "Process"
+		screen.Keys = "Ctrl+F=Find Ctrl+S=Sort Ctrl+V=Switch View"
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxProcess, true, true)
+	case ModeSQLite3:
+		screen.Title = "SQLite3"
+		screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxSQL, true, true)
+	case ModeShell:
+		screen.Title = "Shell"
+		screen.Keys = ""
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxShell, true, true)
+	case ModeTextEdit:
+		screen.Title = "Editor"
+		screen.Keys = "Ctrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close"
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxEditor, true, true)
+	case ModeHelp:
+		screen.Title = "Help"
+		screen.Keys = ""
+		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxHelp, true, true)
+	}
+	ArrScreens = append(ArrScreens, screen)
+	IdxScreens++
+	ShowScreen(IdxScreens)
+	if selfInit != nil {
+		selfInit(param)
+	}
+	SetStatus(fmt.Sprintf("New screen [%s-%s]", screen.Title, strings.ToUpper(screen.ID)))
 }

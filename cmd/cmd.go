@@ -11,6 +11,8 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"gosh/conf"
 	"gosh/edit"
@@ -20,13 +22,11 @@ import (
 	"gosh/pm"
 	"gosh/sq3"
 	"gosh/ui"
-	"gosh/utils"
-	"io"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
-	"github.com/gabriel-vasile/mimetype"
+	"github.com/go-cmd/cmd"
 )
 
 var (
@@ -34,6 +34,39 @@ var (
 	ICmd        int
 	CurrentUser string
 )
+
+type output struct {
+	buf   *bytes.Buffer
+	lines []string
+	*sync.Mutex
+}
+
+func newOutput() *output {
+	return &output{
+		buf:   &bytes.Buffer{},
+		lines: []string{},
+		Mutex: &sync.Mutex{},
+	}
+}
+
+// io.Writer interface is only this method
+func (rw *output) Write(p []byte) (int, error) {
+	rw.Lock()
+	defer rw.Unlock()
+	return rw.buf.Write(p) // and bytes.Buffer implements it, too
+}
+
+func (rw *output) Lines() []string {
+	rw.Lock()
+	defer rw.Unlock()
+	// Scanners are io.Readers which effectively destroy the buffer by reading
+	// to EOF. So once we scan the buf to lines, the buf is empty again.
+	s := bufio.NewScanner(rw.buf)
+	for s.Scan() {
+		rw.lines = append(rw.lines, s.Text())
+	}
+	return rw.lines
+}
 
 // ****************************************************************************
 // xeq()
@@ -50,17 +83,23 @@ func Xeq(c string) {
 		case "!quit", "!exit":
 			ui.PgsApp.SwitchToPage("dlgQuit")
 		case "!shel":
-			SwitchToShell()
+			// SwitchToShell()
+			ui.AddNewScreen(ui.ModeShell, nil, nil)
 		case "!file":
-			SwitchToFiles()
+			// SwitchToFiles()
+			ui.AddNewScreen(ui.ModeFiles, fm.SelfInit, nil)
 		case "!proc":
-			SwitchToProcess()
+			// SwitchToProcess()
+			ui.AddNewScreen(ui.ModeProcess, pm.SelfInit, CurrentUser)
 		case "!edit":
-			SwitchToEditor()
+			// SwitchToEditor()
+			ui.AddNewScreen(ui.ModeTextEdit, edit.SelfInit, nil)
 		case "!sql":
-			SwitchToSQLite3()
+			// SwitchToSQLite3()
+			ui.AddNewScreen(ui.ModeSQLite3, sq3.SelfInit, nil)
 		case "!help":
-			SwitchToHelp()
+			// SwitchToHelp()
+			ui.AddNewScreen(ui.ModeHelp, help.SelfInit, nil)
 		case "!hex":
 			SwitchToHexEdit()
 		default:
@@ -71,42 +110,77 @@ func Xeq(c string) {
 		case "cls":
 			ui.TxtConsole.SetText("")
 		default:
-			SwitchToShell()
 			ui.SetStatus(fmt.Sprintf("Running [%s]", c))
 			ui.HeaderConsole(c)
 
-			xCmd := exec.Command(sCmd[0], sCmd[1:]...)
-			xCmd.Stdout = io.MultiWriter(&ui.StdoutBuf) // ui.StdoutBuf is displayed through the ui.UpdateTime go routine
-			err := xCmd.Run()
-			if err != nil {
-				ui.SetStatus(err.Error())
+			cmdOptions := cmd.Options{
+				Buffered:  false,
+				Streaming: true,
 			}
+
+			xCmd := cmd.NewCmdOptions(cmdOptions, sCmd[0], sCmd[1:]...)
+			doneChan := make(chan struct{})
+			go func() {
+				defer close(doneChan)
+				// Done when both channels have been closed
+				// https://dave.cheney.net/2013/04/30/curious-channels
+				for xCmd.Stdout != nil || xCmd.Stderr != nil {
+					select {
+					case line, open := <-xCmd.Stdout:
+						if !open {
+							xCmd.Stdout = nil
+							continue
+						}
+						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + line + "\n")
+					case line, open := <-xCmd.Stderr:
+						if !open {
+							xCmd.Stderr = nil
+							continue
+						}
+						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + "[yellow]" + line + "[white]\n")
+					}
+				}
+			}()
+
+			// Run and wait for Cmd to return
+			status := <-xCmd.Start()
+			ui.LblPID.SetText(fmt.Sprintf("PID=%d", status.PID))
+
+			// Wait for goroutine to print everything
+			<-doneChan
+			ui.LblRC.SetText(fmt.Sprintf("RC=%d", status.Exit))
+
 		}
 	}
 	ui.TxtPrompt.SetText("", false)
 }
 
+/*
 // ****************************************************************************
 // SwitchToHelp()
 // ****************************************************************************
 func SwitchToHelp() {
 	ui.SetTitle("Help")
 	help.SetHelp()
-	ui.LblKeys.SetText("F2=Shell F3=Files F4=Process F6=Editor F9=SQLite3 F12=Exit")
+	ui.LblKeys.SetText(conf.FKEY_LABELS)
 	ui.PgsApp.SwitchToPage("help")
 	ui.App.SetFocus(ui.TxtHelp)
 }
+*/
 
+/*
 // ****************************************************************************
 // SwitchToShell()
 // ****************************************************************************
 func SwitchToShell() {
 	ui.CurrentMode = ui.ModeShell
 	ui.SetTitle("Shell")
-	ui.LblKeys.SetText("F1=Help F3=Files F4=Process F6=Editor F9=SQLite3 F12=Exit")
-	ui.PgsApp.SwitchToPage("main")
+	ui.LblKeys.SetText(conf.FKEY_LABELS)
+	ui.PgsApp.SwitchToPage("shell")
 }
+*/
 
+/*
 // ****************************************************************************
 // SwitchToEditor()
 // ****************************************************************************
@@ -128,7 +202,9 @@ func SwitchToEditor() {
 		edit.NewFileOrLastFile(conf.Cwd)
 	}
 }
+*/
 
+/*
 // ****************************************************************************
 // SwitchToFiles()
 // ****************************************************************************
@@ -136,12 +212,14 @@ func SwitchToFiles() {
 	ui.CurrentMode = ui.ModeFiles
 	fm.SetFilesMenu()
 	ui.SetTitle("Files")
-	ui.LblKeys.SetText("F1=Help F2=Shell F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nDel=Delete Ins=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort")
+	ui.LblKeys.SetText(conf.FKEY_LABELS + "\nDel=Delete Ins=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort")
 	fm.ShowFiles()
 	ui.App.Sync()
 	ui.App.SetFocus(ui.TblFiles)
 }
+*/
 
+/*
 // ****************************************************************************
 // SwitchToSQLite3()
 // ****************************************************************************
@@ -158,13 +236,13 @@ func SwitchToSQLite3() {
 				if err == nil {
 					ui.CurrentMode = ui.ModeSQLite3
 					ui.SetTitle("SQLite3")
-					ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+					ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 					ui.PgsApp.SwitchToPage("sqlite3")
 					ui.App.SetFocus(ui.TxtPrompt)
 				} else {
 					ui.CurrentMode = ui.ModeSQLite3
 					ui.SetTitle("SQLite3")
-					ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+					ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 					ui.PgsApp.SwitchToPage("sqlite3")
 					ui.App.SetFocus(ui.TxtPrompt)
 					ui.SetStatus(err.Error())
@@ -174,25 +252,26 @@ func SwitchToSQLite3() {
 				sq3.DoExec(fmt.Sprintf("attach database '%s' as %s", fName, utils.FilenameWithoutExtension(filepath.Base(fName))))
 				ui.CurrentMode = ui.ModeSQLite3
 				ui.SetTitle("SQLite3")
-				ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+				ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 				ui.PgsApp.SwitchToPage("sqlite3")
 				ui.App.SetFocus(ui.TxtPrompt)
 			}
 		} else {
 			ui.CurrentMode = ui.ModeSQLite3
 			ui.SetTitle("SQLite3")
-			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 			ui.PgsApp.SwitchToPage("sqlite3")
 			ui.App.SetFocus(ui.TxtPrompt)
 		}
 	} else {
 		ui.CurrentMode = ui.ModeSQLite3
 		ui.SetTitle("SQLite3")
-		ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+		ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 		ui.PgsApp.SwitchToPage("sqlite3")
 		ui.App.SetFocus(ui.TxtPrompt)
 	}
 }
+*/
 
 // ****************************************************************************
 // SwitchToHexEdit()
@@ -205,25 +284,26 @@ func SwitchToHexEdit() {
 			hexedit.Open(fName)
 			ui.CurrentMode = ui.ModeHexEdit
 			ui.SetTitle("HexEdit")
-			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 			ui.PgsApp.SwitchToPage("hexedit")
 			ui.App.SetFocus(ui.TxtPrompt)
 		} else {
 			ui.CurrentMode = ui.ModeHexEdit
 			ui.SetTitle("HexEdit")
-			ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 			ui.PgsApp.SwitchToPage("hexedit")
 			ui.App.SetFocus(ui.TxtPrompt)
 		}
 	} else {
 		ui.CurrentMode = ui.ModeHexEdit
 		ui.SetTitle("HexEdit")
-		ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+O=Open Ctrl+S=Save")
+		ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
 		ui.PgsApp.SwitchToPage("hexedit")
 		ui.App.SetFocus(ui.TxtPrompt)
 	}
 }
 
+/*
 // ****************************************************************************
 // SwitchToProcess()
 // ****************************************************************************
@@ -231,8 +311,9 @@ func SwitchToProcess() {
 	ui.CurrentMode = ui.ModeProcess
 	pm.SetProcessMenu()
 	ui.SetTitle("Process")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F5=Refresh F6=Editor F8=Actions F9=SQLite3 F12=Exit\nCtrl+F=Find Ctrl+S=Sort Ctrl+V=Switch View")
+	ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+F=Find Ctrl+S=Sort Ctrl+V=Switch View")
 	pm.ShowProcesses(CurrentUser)
 	ui.App.Sync()
 	ui.App.SetFocus(ui.TblProcess)
 }
+*/

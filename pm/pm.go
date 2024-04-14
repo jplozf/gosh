@@ -117,31 +117,31 @@ var DlgDisableService *dialog.Dialog
 // SetProcessMenu()
 // ****************************************************************************
 func SetProcessMenu() {
-	MnuProcess = MnuProcess.New("Actions", "process", ui.TblProcess)
-	MnuProcess.AddItem("mnuRenice", "Renice", DoRenice, true)
-	MnuProcess.AddItem("mnuPause", "Pause / Resume", DoPause, true)
-	MnuProcess.AddItem("mnuKill", "Kill", DoKill, true)
-	MnuProcess.AddItem("mnuSendSignal", "Send Signal", DoSendSignal, true)
+	MnuProcess = MnuProcess.New("Actions", ui.GetCurrentScreen(), ui.TblProcess)
+	MnuProcess.AddItem("mnuRenice", "Renice", DoRenice, nil, true)
+	MnuProcess.AddItem("mnuPause", "Pause / Resume", DoPause, nil, true)
+	MnuProcess.AddItem("mnuKill", "Kill", DoKill, nil, true)
+	MnuProcess.AddItem("mnuSendSignal", "Send Signal", DoSendSignal, nil, true)
 	ui.PgsApp.AddPage("dlgProcessAction", MnuProcess.Popup(), true, false)
 
-	MnuProcessSort = MnuProcessSort.New("Sort by", "process", ui.TblProcess)
-	MnuProcessSort.AddItem("mnuSortPIDA", "PID Ascending", DoSortPIDA, false)
-	MnuProcessSort.AddItem("mnuSortPIDD", "PID Descending", DoSortPIDD, true)
-	MnuProcessSort.AddItem("mnuSortTimeA", "Time Ascending", DoSortTimeA, true)
-	MnuProcessSort.AddItem("mnuSortTimeD", "Time Descending", DoSortTimeD, true)
-	MnuProcessSort.AddItem("mnuSortPCPUA", "CPU% Ascending", DoSortCPUA, true)
-	MnuProcessSort.AddItem("mnuSortPCPUD", "CPU% Descending", DoSortCPUD, true)
-	MnuProcessSort.AddItem("mnuSortPMEMA", "MEM% Ascending", DoSortMEMA, true)
-	MnuProcessSort.AddItem("mnuSortPMEMD", "MEM% Descending", DoSortMEMD, true)
+	MnuProcessSort = MnuProcessSort.New("Sort by", ui.GetCurrentScreen(), ui.TblProcess)
+	MnuProcessSort.AddItem("mnuSortPIDA", "PID Ascending", DoSortPIDA, nil, false)
+	MnuProcessSort.AddItem("mnuSortPIDD", "PID Descending", DoSortPIDD, nil, true)
+	MnuProcessSort.AddItem("mnuSortTimeA", "Time Ascending", DoSortTimeA, nil, true)
+	MnuProcessSort.AddItem("mnuSortTimeD", "Time Descending", DoSortTimeD, nil, true)
+	MnuProcessSort.AddItem("mnuSortPCPUA", "CPU% Ascending", DoSortCPUA, nil, true)
+	MnuProcessSort.AddItem("mnuSortPCPUD", "CPU% Descending", DoSortCPUD, nil, true)
+	MnuProcessSort.AddItem("mnuSortPMEMA", "MEM% Ascending", DoSortMEMA, nil, true)
+	MnuProcessSort.AddItem("mnuSortPMEMD", "MEM% Descending", DoSortMEMD, nil, true)
 	// MnuProcessSort.AddItem("mnuShowServices", "Show Services", DoShowServices, true)
 	ui.PgsApp.AddPage("dlgProcessSort", MnuProcessSort.Popup(), true, false)
 
-	MnuService = MnuService.New("Actions", "process", ui.TblProcess)
-	MnuService.AddItem("mnuStart", "Start", DoStartService, true)
-	MnuService.AddItem("mnuStop", "Stop", DoStopService, true)
-	MnuService.AddItem("mnuRestart", "Restart", DoRestartService, true)
-	MnuService.AddItem("mnuEnable", "Enable", DoEnableService, true)
-	MnuService.AddItem("mnuDisable", "Disable", DoDisableService, true)
+	MnuService = MnuService.New("Actions", ui.GetCurrentScreen(), ui.TblProcess)
+	MnuService.AddItem("mnuStart", "Start", DoStartService, nil, true)
+	MnuService.AddItem("mnuStop", "Stop", DoStopService, nil, true)
+	MnuService.AddItem("mnuRestart", "Restart", DoRestartService, nil, true)
+	MnuService.AddItem("mnuEnable", "Enable", DoEnableService, nil, true)
+	MnuService.AddItem("mnuDisable", "Disable", DoDisableService, nil, true)
 	ui.PgsApp.AddPage("dlgServiceAction", MnuService.Popup(), true, false)
 }
 
@@ -173,7 +173,6 @@ func ShowMenuSort() {
 func ShowProcesses(user string) {
 	currentUser = user
 	ui.TxtSelection.Clear()
-	ui.PgsApp.SwitchToPage("process")
 	ui.TxtProcess.SetText(fmt.Sprintf("Overall CPU usage is [yellow]%.2f%%[white]", utils.CpuUsage))
 
 	Processes = readProcesses()
@@ -357,9 +356,9 @@ func readProcesses() map[string][]ProcessColumns {
 }
 
 // ****************************************************************************
-// DoRenice()
+// DoRenice(p any)
 // ****************************************************************************
-func DoRenice() {
+func DoRenice(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
@@ -368,7 +367,7 @@ func DoRenice() {
 			"5",
 			confirmRenice,
 			targetPID,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgRenice", DlgRenice.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgRenice")
 	}
@@ -391,9 +390,9 @@ func confirmRenice(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoPause()
+// DoPause(p any)
 // ****************************************************************************
-func DoPause() {
+func DoPause(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
@@ -423,9 +422,9 @@ func DoPause() {
 }
 
 // ****************************************************************************
-// DoKill()
+// DoKill(p any)
 // ****************************************************************************
-func DoKill() {
+func DoKill(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
@@ -433,7 +432,7 @@ func DoKill() {
 			fmt.Sprintf("Are you sure you want to kill process %d :", targetPID), // Message
 			confirmKill,
 			targetPID,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgKill", DlgKill.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgKill")
 	}
@@ -455,9 +454,9 @@ func confirmKill(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoSendSignal()
+// DoSendSignal(p any)
 // ****************************************************************************
-func DoSendSignal() {
+func DoSendSignal(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		targetPID, _ := strconv.Atoi(ui.TblProcess.GetCell(idx, 0).Text)
@@ -470,7 +469,7 @@ func DoSendSignal() {
 			sig[:],
 			confirmSendSignal,
 			targetPID,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgSendSignal", DlgSendSignal.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgSendSignal")
 		ui.SetStatus(fmt.Sprintf("Sending signal to process %d", targetPID))
@@ -636,9 +635,9 @@ func showServiceDetails(service string) {
 }
 
 // ****************************************************************************
-// DoSortCPUA()
+// DoSortCPUA(p any)
 // ****************************************************************************
-func DoSortCPUA() {
+func DoSortCPUA(p any) {
 	sortColumn = SORT_PCPU
 	sortOrder = SORT_ASCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", false)
@@ -653,9 +652,9 @@ func DoSortCPUA() {
 }
 
 // ****************************************************************************
-// DoSortCPUD()
+// DoSortCPUD(p any)
 // ****************************************************************************
-func DoSortCPUD() {
+func DoSortCPUD(p any) {
 	sortColumn = SORT_PCPU
 	sortOrder = SORT_DESCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -670,9 +669,9 @@ func DoSortCPUD() {
 }
 
 // ****************************************************************************
-// DoSortMEMA()
+// DoSortMEMA(p any)
 // ****************************************************************************
-func DoSortMEMA() {
+func DoSortMEMA(p any) {
 	sortColumn = SORT_PMEM
 	sortOrder = SORT_ASCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -687,9 +686,9 @@ func DoSortMEMA() {
 }
 
 // ****************************************************************************
-// DoSortMEMD()
+// DoSortMEMD(p any)
 // ****************************************************************************
-func DoSortMEMD() {
+func DoSortMEMD(p any) {
 	sortColumn = SORT_PMEM
 	sortOrder = SORT_DESCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -704,9 +703,9 @@ func DoSortMEMD() {
 }
 
 // ****************************************************************************
-// DoSortPIDA()
+// DoSortPIDA(p any)
 // ****************************************************************************
-func DoSortPIDA() {
+func DoSortPIDA(p any) {
 	sortColumn = SORT_PID
 	sortOrder = SORT_ASCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -721,9 +720,9 @@ func DoSortPIDA() {
 }
 
 // ****************************************************************************
-// DoSortPIDD()
+// DoSortPIDD(p any)
 // ****************************************************************************
-func DoSortPIDD() {
+func DoSortPIDD(p any) {
 	sortColumn = SORT_PID
 	sortOrder = SORT_DESCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -738,9 +737,9 @@ func DoSortPIDD() {
 }
 
 // ****************************************************************************
-// DoSortTimeA()
+// DoSortTimeA(p any)
 // ****************************************************************************
-func DoSortTimeA() {
+func DoSortTimeA(p any) {
 	sortColumn = SORT_TIME
 	sortOrder = SORT_ASCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -755,9 +754,9 @@ func DoSortTimeA() {
 }
 
 // ****************************************************************************
-// DoSortTimeD()
+// DoSortTimeD(p any)
 // ****************************************************************************
-func DoSortTimeD() {
+func DoSortTimeD(p any) {
 	sortColumn = SORT_TIME
 	sortOrder = SORT_DESCENDING
 	MnuProcessSort.SetEnabled("mnuSortPCPUA", true)
@@ -772,16 +771,16 @@ func DoSortTimeD() {
 }
 
 // ****************************************************************************
-// DoFindProcess()
+// DoFindProcess(p any)
 // ****************************************************************************
-func DoFindProcess() {
+func DoFindProcess(p any) {
 	if CurrentView == VIEW_PROCESS {
 		DlgFind = DlgFind.Input("Find Process", // Title
 			"Please, enter a part of the name to find", // Message
 			FindString,
 			confirmFind,
 			0,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgFind", DlgFind.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgFind")
 	} else {
@@ -790,7 +789,7 @@ func DoFindProcess() {
 			FindString,
 			confirmFind,
 			0,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgFind", DlgFind.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgFind")
 	}
@@ -833,7 +832,6 @@ func SwitchView() {
 // ****************************************************************************
 func ShowServices() {
 	ui.TxtSelection.Clear()
-	ui.PgsApp.SwitchToPage("process")
 	ui.TxtProcess.SetText(fmt.Sprintf("Overall CPU usage is [yellow]%.2f%%[white]", utils.CpuUsage))
 
 	Services = readServices()
@@ -979,9 +977,9 @@ func InitSignals() {
 }
 
 // ****************************************************************************
-// DoStartService()
+// DoStartService(p any)
 // ****************************************************************************
-func DoStartService() {
+func DoStartService(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		target := ui.TblProcess.GetCell(idx, 0).Text
@@ -989,7 +987,7 @@ func DoStartService() {
 			fmt.Sprintf("Are you sure you want to start service %s :", target), // Message
 			confirmStartService,
 			idx,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgStartService", DlgStartService.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgStartService")
 	}
@@ -1013,9 +1011,9 @@ func confirmStartService(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoStopService()
+// DoStopService(p any)
 // ****************************************************************************
-func DoStopService() {
+func DoStopService(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		target := ui.TblProcess.GetCell(idx, 0).Text
@@ -1023,7 +1021,7 @@ func DoStopService() {
 			fmt.Sprintf("Are you sure you want to stop service %s :", target), // Message
 			confirmStopService,
 			idx,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgStopService", DlgStopService.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgStopService")
 	}
@@ -1047,9 +1045,9 @@ func confirmStopService(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoRestartService()
+// DoRestartService(p any)
 // ****************************************************************************
-func DoRestartService() {
+func DoRestartService(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		target := ui.TblProcess.GetCell(idx, 0).Text
@@ -1057,7 +1055,7 @@ func DoRestartService() {
 			fmt.Sprintf("Are you sure you want to restart service %s :", target), // Message
 			confirmRestartService,
 			idx,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgRestartService", DlgRestartService.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgRestartService")
 	}
@@ -1081,9 +1079,9 @@ func confirmRestartService(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoEnableService()
+// DoEnableService(p any)
 // ****************************************************************************
-func DoEnableService() {
+func DoEnableService(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		target := ui.TblProcess.GetCell(idx, 0).Text
@@ -1091,7 +1089,7 @@ func DoEnableService() {
 			fmt.Sprintf("Are you sure you want to enable service %s :", target), // Message
 			confirmEnableService,
 			idx,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgEnableService", DlgEnableService.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgEnableService")
 	}
@@ -1115,9 +1113,9 @@ func confirmEnableService(rc dialog.DlgButton, idx int) {
 }
 
 // ****************************************************************************
-// DoDisableService()
+// DoDisableService(p any)
 // ****************************************************************************
-func DoDisableService() {
+func DoDisableService(p any) {
 	idx, _ := ui.TblProcess.GetSelection()
 	if idx > 0 {
 		target := ui.TblProcess.GetCell(idx, 0).Text
@@ -1125,7 +1123,7 @@ func DoDisableService() {
 			fmt.Sprintf("Are you sure you want to disable service %s :", target), // Message
 			confirmDisableService,
 			idx,
-			"process", ui.TblProcess) // Focus return
+			ui.GetCurrentScreen(), ui.TblProcess) // Focus return
 		ui.PgsApp.AddPage("dlgDisableService", DlgDisableService.Popup(), true, false)
 		ui.PgsApp.ShowPage("dlgDisableService")
 	}
@@ -1146,4 +1144,14 @@ func confirmDisableService(rc dialog.DlgButton, idx int) {
 			showServiceDetails(service)
 		}
 	}
+}
+
+// ****************************************************************************
+// SelfInit()
+// ****************************************************************************
+func SelfInit(user any) {
+	SetProcessMenu()
+	ShowProcesses(user.(string))
+	ui.App.Sync()
+	ui.App.SetFocus(ui.TblProcess)
 }
