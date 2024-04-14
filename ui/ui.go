@@ -10,6 +10,9 @@
 // ****************************************************************************
 package ui
 
+// ****************************************************************************
+// IMPORTS
+// ****************************************************************************
 import (
 	"bufio"
 	"bytes"
@@ -25,11 +28,33 @@ import (
 	"github.com/rivo/tview"
 )
 
+// ****************************************************************************
+// TYPES
+// ****************************************************************************
 type Fn func()
 type FnAny func(any)
 
 type Mode int
 
+type MyScreen struct {
+	ID    string
+	Title string
+	Page  *tview.Pages
+	Keys  string
+	Mode  Mode
+	Init  FnAny
+	Param any
+}
+
+type Config struct {
+	StartupScreen Mode   `json:"startup_screen"`
+	FormatDate    string `json:"format_date"`
+	FormatTime    string `json:"format_time"`
+}
+
+// ****************************************************************************
+// CONSTANTS
+// ****************************************************************************
 const (
 	ModeShell Mode = iota
 	ModeHelp
@@ -42,69 +67,8 @@ const (
 )
 
 // ****************************************************************************
-// UnmarshalText()
+// GLOBALS
 // ****************************************************************************
-func (m *Mode) UnmarshalText(b []byte) error {
-	str := strings.Trim(string(b), `"`)
-
-	switch {
-	case str == "ModeShell":
-		*m = ModeShell
-	case str == "ModeHelp":
-		*m = ModeHelp
-	case str == "ModeFiles":
-		*m = ModeFiles
-	case str == "ModeTextEdit":
-		*m = ModeTextEdit
-	case str == "ModeHexEdit":
-		*m = ModeHexEdit
-	case str == "ModeProcess":
-		*m = ModeProcess
-	case str == "ModeNetwork":
-		*m = ModeNetwork
-	case str == "ModeSQLite3":
-		*m = ModeSQLite3
-	}
-
-	return nil
-}
-
-// ****************************************************************************
-// String()
-// ****************************************************************************
-func (m Mode) String() string {
-
-	switch m {
-	case ModeShell:
-		return "ModeShell"
-	case ModeHelp:
-		return "ModeHelp"
-	case ModeFiles:
-		return "ModeFiles"
-	case ModeTextEdit:
-		return "ModeTextEdit"
-	case ModeHexEdit:
-		return "ModeHexEdit"
-	case ModeProcess:
-		return "ModeProcess"
-	case ModeNetwork:
-		return "ModeNetwork"
-	case ModeSQLite3:
-		return "ModeSQLite3"
-	}
-	return "?"
-}
-
-type MyScreen struct {
-	ID    string
-	Title string
-	Page  *tview.Pages
-	Keys  string
-	Mode  Mode
-	Init  FnAny
-	Param any
-}
-
 var (
 	SessionID      string
 	IdxScreens     int
@@ -155,15 +119,62 @@ var (
 	CmdOutput      string
 	CmdOutputOld   string
 	ScanCmd        *bufio.Scanner
+	MyConfig       Config
 )
 
-type Config struct {
-	StartupScreen Mode   `json:"startup_screen"`
-	FormatDate    string `json:"format_date"`
-	FormatTime    string `json:"format_time"`
+// ****************************************************************************
+// UnmarshalText() *Mode
+// ****************************************************************************
+func (m *Mode) UnmarshalText(b []byte) error {
+	str := strings.Trim(string(b), `"`)
+
+	switch {
+	case str == "ModeShell":
+		*m = ModeShell
+	case str == "ModeHelp":
+		*m = ModeHelp
+	case str == "ModeFiles":
+		*m = ModeFiles
+	case str == "ModeTextEdit":
+		*m = ModeTextEdit
+	case str == "ModeHexEdit":
+		*m = ModeHexEdit
+	case str == "ModeProcess":
+		*m = ModeProcess
+	case str == "ModeNetwork":
+		*m = ModeNetwork
+	case str == "ModeSQLite3":
+		*m = ModeSQLite3
+	}
+
+	return nil
 }
 
-var MyConfig Config
+// ****************************************************************************
+// String() Mode
+// ****************************************************************************
+func (m Mode) String() string {
+
+	switch m {
+	case ModeShell:
+		return "ModeShell"
+	case ModeHelp:
+		return "ModeHelp"
+	case ModeFiles:
+		return "ModeFiles"
+	case ModeTextEdit:
+		return "ModeTextEdit"
+	case ModeHexEdit:
+		return "ModeHexEdit"
+	case ModeProcess:
+		return "ModeProcess"
+	case ModeNetwork:
+		return "ModeNetwork"
+	case ModeSQLite3:
+		return "ModeSQLite3"
+	}
+	return "?"
+}
 
 // ****************************************************************************
 // setUI()

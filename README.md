@@ -1,5 +1,10 @@
 # 👻 Gosh
 
+## Summary
+* Gosh is a TUI (Text User Interface) for managing a typical Linux box.
+* Gosh is written in Go.
+  
+## Roadmap
 * Shell
 * File Manager
   * Zip

@@ -10,6 +10,9 @@
 // ****************************************************************************
 package main
 
+// ****************************************************************************
+// IMPORTS
+// ****************************************************************************
 import (
 	"bufio"
 	"encoding/json"
@@ -39,6 +42,9 @@ import (
 	"github.com/rivo/tview"
 )
 
+// ****************************************************************************
+// GLOBALS
+// ****************************************************************************
 var (
 	appDir   string
 	hostname string
@@ -98,7 +104,7 @@ func init() {
 		json.Unmarshal(bValues, &ui.MyConfig)
 		ui.SetStatus("Reading config from json")
 	} else {
-		// Set default config (Sorry, time and date formats are the French way :)
+		// Set default config (Sorry, default time and date formats are the French way ;)
 		ui.MyConfig.StartupScreen = ui.ModeShell
 		ui.MyConfig.FormatDate = "02/01/2006"
 		ui.MyConfig.FormatTime = "15:04:05"
@@ -107,13 +113,7 @@ func init() {
 		jsonFile, _ := json.MarshalIndent(ui.MyConfig, "", " ")
 		_ = ioutil.WriteFile(filepath.Join(appDir, conf.FILE_CONFIG), jsonFile, 0644)
 	}
-	/*
-		defer f.Close()
 
-		if _, err = f.WriteString(text); err != nil {
-			panic(err)
-		}
-	*/
 	ui.SetStatus(fmt.Sprintf("Starting session #%s", ui.SessionID))
 	readSettings()
 	pm.CurrentView = pm.VIEW_PROCESS
