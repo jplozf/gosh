@@ -427,7 +427,7 @@ func DoSnapshot(p any) {
 			}
 		}
 	} else {
-		ui.SetStatus("Can't snaphot a selection")
+		ui.SetStatus("Can't snapshot a selection")
 	}
 }
 

@@ -486,11 +486,11 @@ func ShowMainMenu() {
 	MnuMain = MnuMain.New(" "+conf.APP_NAME+" ", ui.GetCurrentScreen(), ui.TxtPrompt)
 	// Dynamic options (screens currently open)
 	for i := 0; i < len(ui.ArrScreens); i++ {
+		chk := false
 		if i == ui.IdxScreens {
-			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, true)
-		} else {
-			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, false)
+			chk = true
 		}
+		MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%2d) %s-%s", i+1, ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, chk)
 	}
 	MnuMain.AddSeparator()
 	// Fixed options

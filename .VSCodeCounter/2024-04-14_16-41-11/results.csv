@@ -1,0 +1,21 @@
+"filename", "language", "Go", "Go Checksum File", "Go Module File", "Markdown", "comment", "blank", "total"
+"/home/jpl/Projets/Go/jplozf/gosh/README.md", "Markdown", 0, 0, 0, 43, 0, 3, 46
+"/home/jpl/Projets/Go/jplozf/gosh/cmd/cmd.go", "Go", 143, 0, 0, 0, 156, 21, 320
+"/home/jpl/Projets/Go/jplozf/gosh/conf/conf.go", "Go", 29, 0, 0, 0, 10, 5, 44
+"/home/jpl/Projets/Go/jplozf/gosh/dialog/dialog.go", "Go", 236, 0, 0, 0, 49, 28, 313
+"/home/jpl/Projets/Go/jplozf/gosh/edit/edit.go", "Go", 349, 0, 0, 0, 88, 29, 466
+"/home/jpl/Projets/Go/jplozf/gosh/editor/editor.go", "Go", 163, 0, 0, 0, 2, 26, 191
+"/home/jpl/Projets/Go/jplozf/gosh/fm/fm.go", "Go", 1047, 0, 0, 0, 170, 70, 1287
+"/home/jpl/Projets/Go/jplozf/gosh/go.mod", "Go Module File", 0, 0, 24, 0, 0, 4, 28
+"/home/jpl/Projets/Go/jplozf/gosh/go.sum", "Go Checksum File", 0, 93, 0, 0, 0, 1, 94
+"/home/jpl/Projets/Go/jplozf/gosh/gosh.go", "Go", 529, 0, 0, 0, 83, 39, 651
+"/home/jpl/Projets/Go/jplozf/gosh/help/help.go", "Go", 237, 0, 0, 0, 16, 20, 273
+"/home/jpl/Projets/Go/jplozf/gosh/hexedit/hexedit.go", "Go", 95, 0, 0, 0, 29, 14, 138
+"/home/jpl/Projets/Go/jplozf/gosh/menu/menu.go", "Go", 156, 0, 0, 0, 51, 17, 224
+"/home/jpl/Projets/Go/jplozf/gosh/nm/nm.go", "Go", 18, 0, 0, 0, 17, 4, 39
+"/home/jpl/Projets/Go/jplozf/gosh/pm/pm.go", "Go", 907, 0, 0, 0, 182, 69, 1158
+"/home/jpl/Projets/Go/jplozf/gosh/preview/preview.go", "Go", 122, 0, 0, 0, 32, 14, 168
+"/home/jpl/Projets/Go/jplozf/gosh/sq3/sq3.go", "Go", 469, 0, 0, 0, 87, 26, 582
+"/home/jpl/Projets/Go/jplozf/gosh/ui/ui.go", "Go", 549, 0, 0, 0, 129, 69, 747
+"/home/jpl/Projets/Go/jplozf/gosh/utils/utils.go", "Go", 332, 0, 0, 0, 78, 48, 458
+"Total", "-", 5381, 93, 24, 43, 1179, 507, 7227
