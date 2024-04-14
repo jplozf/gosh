@@ -30,6 +30,7 @@ type MenuItem struct {
 	Done    func(any)
 	Param   any
 	Enabled bool
+	Checked bool
 }
 
 type Menu struct {
@@ -45,13 +46,14 @@ type Menu struct {
 // ****************************************************************************
 // New() MenuItem
 // ****************************************************************************
-func (mi *MenuItem) New(name string, label string, done func(any), param any, enabled bool) *MenuItem {
+func (mi *MenuItem) New(name string, label string, done func(any), param any, enabled bool, checked bool) *MenuItem {
 	mi = &MenuItem{
 		Name:    name,
 		Label:   label,
 		Done:    done,
 		Param:   param,
 		Enabled: enabled,
+		Checked: checked,
 	}
 	return mi
 }
@@ -72,9 +74,9 @@ func (m *Menu) New(title string, parent string, focus tview.Primitive) *Menu {
 // ****************************************************************************
 // AddItem() Menu
 // ****************************************************************************
-func (m *Menu) AddItem(name string, label string, event func(any), param any, enabled bool) {
+func (m *Menu) AddItem(name string, label string, event func(any), param any, enabled bool, checked bool) {
 	var item *MenuItem
-	item = item.New(name, label, event, param, enabled)
+	item = item.New(name, label, event, param, enabled, checked)
 	m.items = append(m.items, *item)
 }
 
@@ -83,7 +85,7 @@ func (m *Menu) AddItem(name string, label string, event func(any), param any, en
 // ****************************************************************************
 func (m *Menu) AddSeparator() {
 	var item *MenuItem
-	item = item.New("SEPARATOR", "-", nil, nil, false)
+	item = item.New("SEPARATOR", "-", nil, nil, false, false)
 	m.items = append(m.items, *item)
 }
 
@@ -97,6 +99,46 @@ func (m *Menu) SetEnabled(miName string, e bool) {
 		}
 	}
 	m.refresh()
+}
+
+// ****************************************************************************
+// SetChecked() Menu
+// ****************************************************************************
+func (m *Menu) SetChecked(miName string, c bool) {
+	for index, item := range m.items {
+		if item.Name == miName {
+			m.items[index].Checked = c
+		}
+	}
+	m.refresh()
+}
+
+// ****************************************************************************
+// IsChecked() Menu
+// ****************************************************************************
+func (m *Menu) IsChecked(miName string) bool {
+	for _, item := range m.items {
+		if item.Name == miName {
+			if item.Checked {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ****************************************************************************
+// IsEnabled() Menu
+// ****************************************************************************
+func (m *Menu) IsEnabled(miName string) bool {
+	for _, item := range m.items {
+		if item.Name == miName {
+			if item.Enabled {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ****************************************************************************
@@ -122,7 +164,11 @@ func (m *Menu) refresh() {
 	m.Table.SetSelectable(true, false)
 	m.Table.SetBackgroundColor(tcell.ColorBlue)
 	for i, item := range m.items {
-		item.Label = "  " + item.Label + "  "
+		prf := "  "
+		if item.Checked {
+			prf = "✓ "
+		}
+		item.Label = prf + item.Label + "  "
 		if item.Enabled {
 			m.Table.SetCell(i, 0, tview.NewTableCell(item.Label).SetTextColor(tcell.ColorYellow))
 		} else {

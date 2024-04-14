@@ -396,11 +396,11 @@ func doSelect(q string) {
 // ****************************************************************************
 func SetSQLMenu() {
 	MnuSQL = MnuSQL.New("Actions", "sqlite3", ui.TblSQLOutput)
-	MnuSQL.AddItem("mnuExportCell", "Export cell", DoExportCell, nil, true)
-	MnuSQL.AddItem("mnuExportRow", "Export row to CSV", DoExportRow, nil, true)
-	MnuSQL.AddItem("mnuExportAll", "Export all to CSV", DoExportAll, nil, true)
-	MnuSQL.AddItem("mnuExportStructSQL", "Export structure to SQL script", DoExportAll, nil, true)
-	MnuSQL.AddItem("mnuExportAllSQL", "Export all to SQL script", DoExportAll, nil, true)
+	MnuSQL.AddItem("mnuExportCell", "Export cell", DoExportCell, nil, true, false)
+	MnuSQL.AddItem("mnuExportRow", "Export row to CSV", DoExportRow, nil, true, false)
+	MnuSQL.AddItem("mnuExportAll", "Export all to CSV", DoExportAll, nil, true, false)
+	MnuSQL.AddItem("mnuExportStructSQL", "Export structure to SQL script", DoExportAll, nil, true, false)
+	MnuSQL.AddItem("mnuExportAllSQL", "Export all to SQL script", DoExportAll, nil, true, false)
 	ui.PgsApp.AddPage("dlgMenuAction", MnuSQL.Popup(), true, false)
 }
 

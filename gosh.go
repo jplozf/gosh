@@ -487,20 +487,20 @@ func ShowMainMenu() {
 	// Dynamic options (screens currently open)
 	for i := 0; i < len(ui.ArrScreens); i++ {
 		if i == ui.IdxScreens {
-			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("✓ %s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true)
+			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, true)
 		} else {
-			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("  %s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true)
+			MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%s-%s", ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, false)
 		}
 	}
 	MnuMain.AddSeparator()
 	// Fixed options
-	MnuMain.AddItem("mnuHelp", "Help", SwitchToHelp, nil, true)
-	MnuMain.AddItem("mnuShell", "Shell", SwitchToShell, nil, true)
-	MnuMain.AddItem("mnuFiles", "File Manager", SwitchToFiles, nil, true)
-	MnuMain.AddItem("mnuProcess", "Process and Services", SwitchToProcess, nil, true)
-	MnuMain.AddItem("mnuTextEdit", "Text Editor", SwitchToTextEdit, nil, true)
-	MnuMain.AddItem("mnuSQLite3", "SQLite3 Manager", SwitchToSQLite3, nil, true)
-	MnuMain.AddItem("mnuHexEdit", "Hexadecimal Editor", SwitchToHexEdit, nil, true)
+	MnuMain.AddItem("mnuHelp", "Help", SwitchToHelp, nil, true, false)
+	MnuMain.AddItem("mnuShell", "Shell", SwitchToShell, nil, true, false)
+	MnuMain.AddItem("mnuFiles", "File Manager", SwitchToFiles, nil, true, false)
+	MnuMain.AddItem("mnuProcess", "Process and Services", SwitchToProcess, nil, true, false)
+	MnuMain.AddItem("mnuTextEdit", "Text Editor", SwitchToTextEdit, nil, true, false)
+	MnuMain.AddItem("mnuSQLite3", "SQLite3 Manager", SwitchToSQLite3, nil, true, false)
+	MnuMain.AddItem("mnuHexEdit", "Hexadecimal Editor", SwitchToHexEdit, nil, true, false)
 
 	ui.PgsApp.AddPage("dlgMainMenu", MnuMain.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgMainMenu")

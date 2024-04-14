@@ -89,32 +89,28 @@ var pasteTarget string
 // ****************************************************************************
 func SetFilesMenu() {
 	MnuFiles = MnuFiles.New("Actions", ui.GetCurrentScreen(), ui.TblFiles)
-	MnuFiles.AddItem("mnuEdit", "Edit", DoEdit, nil, true)
-	// MnuFiles.AddItem("mnuOpen", "Open", DoDelete, true)
-	MnuFiles.AddItem("mnuSelect", "Select / Unselect All", SelectAll, nil, true)
-	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, nil, true)
-	MnuFiles.AddItem("mnuRename", "Rename", DoRename, nil, true)
-	MnuFiles.AddItem("mnuCopy", "Copy", DoCopy, nil, true)
-	MnuFiles.AddItem("mnuCut", "Cut", DoCut, nil, true)
-	MnuFiles.AddItem("mnuPaste", "Paste", DoPaste, nil, false)
-	MnuFiles.AddItem("mnuCreateFile", "New File", DoNewFile, nil, true)
-	MnuFiles.AddItem("mnuCreateFolder", "New Folder", DoNewFolder, nil, true)
-	// MnuFiles.AddItem("mnuCreateLink", "Create Link", DoCreateLink, true)
-	MnuFiles.AddItem("mnuZip", "Zip", DoZip, nil, true)
-	// MnuFiles.AddItem("mnuHashes", "Get Hashes", DoDelete, true)
-	// MnuFiles.AddItem("mnuEncrypt", "Encrypt", DoDelete, true)
-	// MnuFiles.AddItem("mnuTimestamp", "Timestamp", DoTimestamp, true)
-	MnuFiles.AddItem("mnuSnapshot", "Snapshot", DoSnapshot, nil, true)
-	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, nil, true)
+	MnuFiles.AddItem("mnuEdit", "Edit", DoEdit, nil, true, false)
+	MnuFiles.AddItem("mnuSelect", "Select / Unselect All", SelectAll, nil, true, false)
+	MnuFiles.AddItem("mnuDelete", "Delete", DoDelete, nil, true, false)
+	MnuFiles.AddItem("mnuRename", "Rename", DoRename, nil, true, false)
+	MnuFiles.AddItem("mnuCopy", "Copy", DoCopy, nil, true, false)
+	MnuFiles.AddItem("mnuCut", "Cut", DoCut, nil, true, false)
+	MnuFiles.AddItem("mnuPaste", "Paste", DoPaste, nil, false, false)
+	MnuFiles.AddItem("mnuCreateFile", "New File", DoNewFile, nil, true, false)
+	MnuFiles.AddItem("mnuCreateFolder", "New Folder", DoNewFolder, nil, true, false)
+	MnuFiles.AddItem("mnuZip", "Zip", DoZip, nil, true, false)
+	MnuFiles.AddItem("mnuSnapshot", "Snapshot", DoSnapshot, nil, true, false)
+	MnuFiles.AddItem("mnuShowHiddenFiles", "Show hidden files", DoSwitchHiddenFiles, nil, true, false)
 	ui.PgsApp.AddPage("dlgFileAction", MnuFiles.Popup(), true, false)
 
 	MnuFilesSort = MnuFilesSort.New("Sort by", ui.GetCurrentScreen(), ui.TblFiles)
-	MnuFilesSort.AddItem("mnuSortNameA", "Name Ascending", doSortNameA, nil, false)
-	MnuFilesSort.AddItem("mnuSortNameD", "Name Descending", doSortNameD, nil, true)
-	MnuFilesSort.AddItem("mnuSortSizeA", "Size Ascending", doSortSizeA, nil, true)
-	MnuFilesSort.AddItem("mnuSortSizeD", "Size Descending", doSortSizeD, nil, true)
-	MnuFilesSort.AddItem("mnuSortTimeA", "Time Ascending", doSortTimeA, nil, true)
-	MnuFilesSort.AddItem("mnuSortTimeD", "Time Descending", doSortTimeD, nil, true)
+	MnuFilesSort.AddItem("mnuSortNameA", "Name Ascending", doSortNameA, nil, false, true)
+	MnuFilesSort.AddItem("mnuSortNameD", "Name Descending", doSortNameD, nil, true, false)
+	MnuFilesSort.AddItem("mnuSortSizeA", "Size Ascending", doSortSizeA, nil, true, false)
+	MnuFilesSort.AddItem("mnuSortSizeD", "Size Descending", doSortSizeD, nil, true, false)
+	MnuFilesSort.AddItem("mnuSortTimeA", "Time Ascending", doSortTimeA, nil, true, false)
+	MnuFilesSort.AddItem("mnuSortTimeD", "Time Descending", doSortTimeD, nil, true, false)
+
 	ui.PgsApp.AddPage("dlgFileSort", MnuFilesSort.Popup(), true, false)
 }
 
@@ -859,6 +855,13 @@ func doSortNameA(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", true)
+	MnuFilesSort.SetChecked("mnuSortNameD", false)
+	MnuFilesSort.SetChecked("mnuSortSizeA", false)
+	MnuFilesSort.SetChecked("mnuSortSizeD", false)
+	MnuFilesSort.SetChecked("mnuSortTimeA", false)
+	MnuFilesSort.SetChecked("mnuSortTimeD", false)
 	RefreshMe()
 }
 
@@ -874,6 +877,13 @@ func doSortNameD(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", false)
+	MnuFilesSort.SetChecked("mnuSortNameD", true)
+	MnuFilesSort.SetChecked("mnuSortSizeA", false)
+	MnuFilesSort.SetChecked("mnuSortSizeD", false)
+	MnuFilesSort.SetChecked("mnuSortTimeA", false)
+	MnuFilesSort.SetChecked("mnuSortTimeD", false)
 	RefreshMe()
 }
 
@@ -889,6 +899,13 @@ func doSortSizeA(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", false)
+	MnuFilesSort.SetChecked("mnuSortNameD", false)
+	MnuFilesSort.SetChecked("mnuSortSizeA", true)
+	MnuFilesSort.SetChecked("mnuSortSizeD", false)
+	MnuFilesSort.SetChecked("mnuSortTimeA", false)
+	MnuFilesSort.SetChecked("mnuSortTimeD", false)
 	RefreshMe()
 }
 
@@ -904,6 +921,13 @@ func doSortSizeD(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", false)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", false)
+	MnuFilesSort.SetChecked("mnuSortNameD", false)
+	MnuFilesSort.SetChecked("mnuSortSizeA", false)
+	MnuFilesSort.SetChecked("mnuSortSizeD", true)
+	MnuFilesSort.SetChecked("mnuSortTimeA", false)
+	MnuFilesSort.SetChecked("mnuSortTimeD", false)
 	RefreshMe()
 }
 
@@ -919,6 +943,13 @@ func doSortTimeA(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", false)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", true)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", false)
+	MnuFilesSort.SetChecked("mnuSortNameD", false)
+	MnuFilesSort.SetChecked("mnuSortSizeA", false)
+	MnuFilesSort.SetChecked("mnuSortSizeD", false)
+	MnuFilesSort.SetChecked("mnuSortTimeA", true)
+	MnuFilesSort.SetChecked("mnuSortTimeD", false)
 	RefreshMe()
 }
 
@@ -934,6 +965,13 @@ func doSortTimeD(p any) {
 	MnuFilesSort.SetEnabled("mnuSortSizeD", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeA", true)
 	MnuFilesSort.SetEnabled("mnuSortTimeD", false)
+
+	MnuFilesSort.SetChecked("mnuSortNameA", false)
+	MnuFilesSort.SetChecked("mnuSortNameD", false)
+	MnuFilesSort.SetChecked("mnuSortSizeA", false)
+	MnuFilesSort.SetChecked("mnuSortSizeD", false)
+	MnuFilesSort.SetChecked("mnuSortTimeA", false)
+	MnuFilesSort.SetChecked("mnuSortTimeD", true)
 	RefreshMe()
 }
 
