@@ -1,6 +1,6 @@
 # 👻 Gosh
 
-## Summary
+## Overview
 * Gosh is a TUI (Text User Interface) for managing a typical Linux box.
 * Gosh is written in Go.
   
@@ -26,6 +26,7 @@
 * Crontab Manager
 * SQLite3 Manager
 * Users Manager
+* Disks Manager
 * Updates Manager
   * dnf
   * apt
@@ -40,6 +41,8 @@
 * Self Update
 * Sudo
 * Ephemerids
+* RPN calculator
 * Restic backup
+* ClamAV Manager
 * PDF viewer
 * Mails

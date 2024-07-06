@@ -68,7 +68,7 @@ func init() {
 		log.Fatalf(err.Error())
 	}
 	cmd.CurrentUser = user.Username
-	greeting = cmd.CurrentUser + "@" + hostname + ":"
+	greeting = cmd.CurrentUser + "@" + hostname + "⯈"
 
 	cmd.ICmd = 0
 	ui.App = tview.NewApplication()
@@ -81,7 +81,8 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conf.Cwd = userDir
+	// Set the Current Working Directory
+	conf.Cwd, _ = os.Getwd()
 	fm.Hidden = false
 	appDir = filepath.Join(userDir, conf.APP_FOLDER)
 	if _, err := os.Stat(appDir); errors.Is(err, os.ErrNotExist) {
@@ -142,7 +143,7 @@ func main() {
 		case tcell.KeyF10:
 			ShowMainMenu()
 		case tcell.KeyF12:
-			ui.PgsApp.SwitchToPage("dlgQuit")
+			ShowQuitDialog(nil)
 		case tcell.KeyCtrlC:
 			return nil
 		case tcell.KeyCtrlO:
@@ -158,6 +159,11 @@ func main() {
 			}
 			if ui.CurrentMode == ui.ModeHexEdit {
 				hexedit.Close()
+			}
+		case tcell.KeyEsc:
+			if ui.CurrentMode == ui.ModeShell {
+				ui.SetStatus("YO!")
+				ui.App.ForceDraw()
 			}
 		}
 		return event
@@ -362,6 +368,19 @@ func main() {
 			if ui.CurrentMode == ui.ModeSQLite3 {
 				ui.App.SetFocus(ui.TblSQLOutput)
 			}
+			if ui.CurrentMode == ui.ModeHexEdit {
+				ui.App.SetFocus(ui.TblHexEdit)
+			}
+			return nil
+		}
+		return event
+	})
+
+	// HexEdit keyboard's events manager
+	ui.TblHexEdit.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTAB:
+			ui.App.SetFocus(ui.TxtFileInfo)
 			return nil
 		}
 		return event
@@ -474,6 +493,7 @@ func main() {
 
 	go ui.UpdateTime()
 	go utils.GetCpuUsage()
+	// FIXME : SetFocus on the correct ui.FlxXXX depending on the ui.MyConfig.StartupScreen
 	if err := ui.App.SetRoot(ui.PgsApp, true).SetFocus(ui.FlxShell).EnableMouse(true).Run(); err != nil {
 		panic(err)
 	}
@@ -501,6 +521,8 @@ func ShowMainMenu() {
 	MnuMain.AddItem("mnuTextEdit", "Text Editor", SwitchToTextEdit, nil, true, false)
 	MnuMain.AddItem("mnuSQLite3", "SQLite3 Manager", SwitchToSQLite3, nil, true, false)
 	MnuMain.AddItem("mnuHexEdit", "Hexadecimal Editor", SwitchToHexEdit, nil, true, false)
+	MnuMain.AddSeparator()
+	MnuMain.AddItem("mnuQuit", "Quit", ShowQuitDialog, nil, true, false)
 
 	ui.PgsApp.AddPage("dlgMainMenu", MnuMain.Popup(), true, false)
 	ui.PgsApp.ShowPage("dlgMainMenu")
@@ -552,7 +574,7 @@ func SwitchToSQLite3(p any) {
 // SwitchToHexEdit(p any)
 // ****************************************************************************
 func SwitchToHexEdit(p any) {
-	ui.AddNewScreen(ui.ModeHexEdit, nil, nil)
+	ui.AddNewScreen(ui.ModeHexEdit, hexedit.SelfInit, nil)
 }
 
 // ****************************************************************************
@@ -560,6 +582,7 @@ func SwitchToHexEdit(p any) {
 // appQuit performs some cleanup and saves persistent data before quitting application
 // ****************************************************************************
 func appQuit() {
+	// TODO : Clean up gosh_edit_ null files
 	edit.CheckOpenFilesForSaving()
 	saveSettings()
 	ui.SetStatus(fmt.Sprintf("Quitting session #%s", ui.SessionID))
@@ -648,3 +671,37 @@ func welcome() {
 	ui.HeaderConsole(w1)
 	ui.OutConsole(w2)
 }
+
+// ****************************************************************************
+// ShowQuitDialog()
+// ****************************************************************************
+func ShowQuitDialog(p any) {
+	ui.PgsApp.SwitchToPage("dlgQuit")
+}
+
+/*
+ > lsblk -l
+NAME      MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+sda         8:0    0   1,8T  0 disk
+sda1        8:1    0   1,8T  0 part /media/HDD
+sdb         8:16   0  16,4T  0 disk
+sdb1        8:17   0  16,4T  0 part /media/WD001
+zram0     252:0    0     8G  0 disk [SWAP]
+nvme0n1   259:0    0 953,9G  0 disk
+nvme0n1p1 259:1    0   600M  0 part /boot/efi
+nvme0n1p2 259:2    0     1G  0 part /boot
+nvme0n1p3 259:3    0 952,3G  0 part /home
+                                    /
+> lsblk -l -f
+NAME      FSTYPE FSVER LABEL                 UUID                                 FSAVAIL FSUSE% MOUNTPOINTS
+sda
+sda1      ext4   1.0   HDD                   6bde9668-7563-4fa6-8c24-ba476bdaa32d    1,5T    12% /media/HDD
+sdb
+sdb1      ntfs         Elements              44AEC11EAEC108FE                       10,2T    38% /media/WD001
+zram0                                                                                            [SWAP]
+nvme0n1
+nvme0n1p1 vfat   FAT32                       C774-45D1                             579,8M     3% /boot/efi
+nvme0n1p2 ext4   1.0                         20983b86-2f43-4b9b-91ad-60f735301c6f  722,2M    19% /boot
+nvme0n1p3 btrfs        fedora_localhost-live 4f10530a-0708-416f-b436-0e375e3acda4    664G    21% /home
+                                                                                                 /
+*/

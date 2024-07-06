@@ -44,6 +44,7 @@ type MyScreen struct {
 	Mode  Mode
 	Init  FnAny
 	Param any
+	Flex  *tview.Flex
 }
 
 type Config struct {
@@ -96,6 +97,7 @@ var (
 	LblScreen      *tview.TextView
 	LblPID         *tview.TextView
 	LblRC          *tview.TextView
+	LblHourglass   *tview.TextView
 	PgsApp         *tview.Pages
 	DlgQuit        *tview.Modal
 	TblFiles       *tview.Table
@@ -217,9 +219,15 @@ func SetUI(fQuit Fn, hostname string) {
 	LblPID.SetTextColor(tcell.ColorWheat)
 
 	LblRC = tview.NewTextView()
+	LblRC.SetDynamicColors(true)
 	LblRC.SetBorder(false)
 	LblRC.SetBackgroundColor(tcell.ColorDarkGreen)
 	LblRC.SetTextColor(tcell.ColorWheat)
+
+	LblHourglass = tview.NewTextView()
+	LblHourglass.SetBorder(false)
+	LblHourglass.SetBackgroundColor(tcell.ColorDarkGreen)
+	LblHourglass.SetTextColor(tcell.ColorWheat)
 
 	LblHostname = tview.NewTextView()
 	LblHostname.SetBorder(false)
@@ -331,6 +339,7 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(lblTitle, 0, 1, false).
 			AddItem(lblTime, 8, 0, false), 1, 0, false).
 		AddItem(TxtConsole, 0, 1, false).
+		AddItem(TxtPath, 3, 0, false).
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
@@ -338,7 +347,8 @@ func SetUI(fQuit Fn, hostname string) {
 			AddItem(lblStatus, 0, 1, false).
 			AddItem(LblPID, 12, 0, false).
 			AddItem(LblRC, 8, 0, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Help Layout
@@ -354,7 +364,8 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Files Layout
@@ -377,7 +388,8 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	TblFiles.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
@@ -408,7 +420,8 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Editor Layout
@@ -430,7 +443,8 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// SQLite3 Layout
@@ -452,7 +466,8 @@ func SetUI(fQuit Fn, hostname string) {
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// HexaEditor Layout
@@ -468,13 +483,14 @@ func SetUI(fQuit Fn, hostname string) {
 				AddItem(TblHexEdit, 0, 1, true), 0, 2, true).
 			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 				AddItem(TblSQLTables, 12, 0, false).
-				AddItem(TrvSQLDatabase, 0, 1, false), 0, 1, false), 0, 1, false).
+				AddItem(TxtFileInfo, 0, 1, false), 0, 1, false), 0, 1, false).
 		AddItem(LblKeys, 2, 1, false).
 		AddItem(TxtPrompt, 2, 1, true).
 		AddItem(tview.NewFlex().
 			AddItem(LblHostname, len(hostname)+3, 0, false).
 			AddItem(lblStatus, 0, 1, false).
-			AddItem(LblScreen, 5, 0, false), 1, 0, false)
+			AddItem(LblScreen, 5, 0, false).
+			AddItem(LblHourglass, 2, 0, false), 1, 0, false)
 
 	//*************************************************************************
 	// Misc
@@ -713,7 +729,7 @@ func AddNewScreen(mode Mode, selfInit FnAny, param any) {
 		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxFiles, true, true)
 	case ModeHexEdit:
 		screen.Title = "Hexedit"
-		screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
+		screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"
 		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxHexEdit, true, true)
 	case ModeProcess:
 		screen.Title = "Process"
@@ -743,4 +759,14 @@ func AddNewScreen(mode Mode, selfInit FnAny, param any) {
 		selfInit(param)
 	}
 	SetStatus(fmt.Sprintf("New screen [%s-%s]", screen.Title, strings.ToUpper(screen.ID)))
+}
+
+func PleaseWait() {
+	SetStatus("Running...")
+	LblHourglass.SetText("⌛")
+	App.ForceDraw()
+}
+
+func JobsDone() {
+	LblHourglass.SetText("")
 }

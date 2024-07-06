@@ -17,11 +17,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"gosh/conf"
 	"gosh/dialog"
+	"gosh/preview"
 	"gosh/ui"
 	"gosh/utils"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
@@ -39,9 +43,9 @@ var (
 )
 
 // ****************************************************************************
-// Open()
+// OpenFile()
 // ****************************************************************************
-func Open(fName string) {
+func OpenFile(fName string) {
 	CurrentHexFile = fName
 	f, err := os.Open(fName)
 	if err != nil {
@@ -71,17 +75,28 @@ func Open(fName string) {
 			break
 		}
 		c = offset % 16
+		// Display the address in first column
 		if c == 0 {
 			ui.TblHexEdit.SetCell(r+1, c, tview.NewTableCell(fmt.Sprintf(" %08X", offset)).SetTextColor(tcell.ColorBlue))
 		}
 
+		// Display the Hex value
 		ui.TblHexEdit.SetCell(r+1, c+1, tview.NewTableCell(fmt.Sprintf("%02X", b)))
-		if unicode.IsGraphic(rune(b)) {
+		// Add the ascii value to the ascii string
+		if isASCII(string(b)) {
 			ascii = ascii + string(b)
 		} else {
 			ascii = ascii + "."
 		}
+		/*
+			if unicode.IsPrint(rune(b)) {
+				ascii = ascii + string(b)
+			} else {
+				ascii = ascii + "."
+			}
+		*/
 
+		// Display the ascii string
 		if c == 15 {
 			for i := 0; i < len(ascii); i++ {
 				ui.TblHexEdit.SetCell(r+1, c+2+i, tview.NewTableCell(string(ascii[i])).SetTextColor(tcell.ColorYellow))
@@ -99,7 +114,10 @@ func Open(fName string) {
 	ui.TblHexEdit.SetFixed(1, 0)
 	ui.TblHexEdit.Select(1, 0)
 	ui.TblHexEdit.ScrollToBeginning()
-	ui.App.SetFocus(ui.TblHexEdit)
+	preview.DisplayExif(fName)
+	ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
+	ui.App.SetFocus(ui.TxtPrompt)
+	ui.SetStatus(fmt.Sprintf("File %s successfully open", fName))
 }
 
 // ****************************************************************************
@@ -122,7 +140,7 @@ func DoOpen(path string) {
 func confirmOpen(rc dialog.DlgButton, idx int) {
 	if rc == dialog.BUTTON_OK {
 		fName := DlgOpen.Value
-		Open(fName)
+		OpenFile(fName)
 	}
 }
 
@@ -133,5 +151,73 @@ func Close() {
 	// TODO : Save any modification on file
 	ui.TblHexEdit.Clear()
 	ui.TxtHexName.Clear()
+	ui.TxtFileInfo.Clear()
 	CurrentHexFile = ""
+	ui.SetStatus("File closed")
+}
+
+// ****************************************************************************
+// SelfInit()
+// ****************************************************************************
+func SelfInit(a any) {
+	if ui.CurrentMode == ui.ModeFiles {
+		if CurrentHexFile == "" {
+			idx, _ := ui.TblFiles.GetSelection()
+			fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
+			ui.CurrentMode = ui.ModeHexEdit
+			ui.SetTitle("HexEdit")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
+			scr := ui.GetScreenFromTitle("HexEdit")
+			if scr == "NIL" {
+				var screen ui.MyScreen
+				screen.ID, _ = utils.RandomHex(3)
+				screen.Mode = ui.ModeHexEdit
+				screen.Title = "HexEdit"
+				screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"
+				ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxHexEdit, true, true)
+				scr = screen.Title + "_" + screen.ID
+				ui.ArrScreens = append(ui.ArrScreens, screen)
+				ui.IdxScreens++
+			}
+			ui.PgsApp.SwitchToPage(scr) // ???
+			OpenFile(fName)
+			ui.App.SetFocus(ui.TxtPrompt)
+		} else {
+			ui.CurrentMode = ui.ModeHexEdit
+			ui.SetTitle("HexEdit")
+			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
+			ui.PgsApp.SwitchToPage("hexedit")
+			ui.App.SetFocus(ui.TxtPrompt)
+		}
+	} else {
+		ui.CurrentMode = ui.ModeHexEdit
+		ui.SetTitle("HexEdit")
+		ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
+		scr := ui.GetScreenFromTitle("HexEdit")
+		if scr == "NIL" {
+			var screen ui.MyScreen
+			screen.ID, _ = utils.RandomHex(3)
+			screen.Mode = ui.ModeHexEdit
+			screen.Title = "HexEdit"
+			screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"
+			ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxHexEdit, true, true)
+			scr = screen.Title + "_" + screen.ID
+			ui.ArrScreens = append(ui.ArrScreens, screen)
+			ui.IdxScreens++
+		}
+		ui.PgsApp.SwitchToPage(scr) // ???
+		ui.App.SetFocus(ui.TxtPrompt)
+	}
+}
+
+// ****************************************************************************
+// isASCII()
+// ****************************************************************************
+func isASCII(s string) bool {
+	for _, c := range s {
+		if c < 32 || c > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }

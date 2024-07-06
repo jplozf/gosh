@@ -631,6 +631,7 @@ func DoPaste(p any) {
 	} else {
 		pasteTarget = conf.Cwd
 		if pasteMode == PASTE_COPY || pasteMode == PASTE_DEFAULT {
+			ui.PleaseWait()
 			for _, s := range sel {
 				if s.fType == "FOLDER" {
 					_ = utils.CopyFolderIntoFolder(s.fName, pasteTarget)
@@ -642,9 +643,11 @@ func DoPaste(p any) {
 			}
 			sel = nil
 			RefreshMe()
+			ui.JobsDone()
 			focusOn(fName)
 		}
 		if pasteMode == PASTE_CUT {
+			ui.PleaseWait()
 			for _, s := range sel {
 				if s.fType == "FOLDER" {
 					err := utils.CopyFolderIntoFolder(s.fName, pasteTarget)
@@ -669,6 +672,7 @@ func DoPaste(p any) {
 			}
 			sel = nil
 			RefreshMe()
+			ui.JobsDone()
 			focusOn(fName)
 		}
 	}
@@ -979,6 +983,7 @@ func doSortTimeD(p any) {
 // ProceedFileAction()
 // ****************************************************************************
 func ProceedFileAction() {
+	ui.PleaseWait()
 	idx, _ := ui.TblFiles.GetSelection()
 	// TODO : manage LINK
 	targetType := strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text)
@@ -1005,7 +1010,7 @@ func ProceedFileAction() {
 
 		mtype, xmtype := preview.DisplayFilePreview(fName)
 		size, _ := strconv.ParseFloat(ui.TblFiles.GetCell(idx, 6).Text, 64)
-		if size <= conf.HASH_THRESHOLD_SIZE {
+		if size <= conf.HASH_THRESHOLD_SIZE || true { // !!! TEST SKIPPED !!!
 			infos := map[string]string{
 				"00Name":          ui.TblFiles.GetCell(idx, 2).Text,
 				"01Change Date":   ui.TblFiles.GetCell(idx, 3).Text,
@@ -1042,13 +1047,15 @@ func ProceedFileAction() {
 		ShowFiles()
 		ui.App.SetFocus(ui.TblFiles)
 	}
-	ui.App.Sync()
+	// ui.App.Sync()
+	ui.JobsDone()
 }
 
 // ****************************************************************************
 // ProceedFileSelect()
 // ****************************************************************************
 func ProceedFileSelect() {
+	ui.PleaseWait()
 	idx, _ := ui.TblFiles.GetSelection()
 	if ui.TblFiles.GetCell(idx, 3).Text != conf.LABEL_PARENT_FOLDER {
 		if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
@@ -1109,6 +1116,7 @@ func ProceedFileSelect() {
 			ui.TblFiles.Select(idx+1, 0)
 		}
 	}
+	ui.JobsDone()
 }
 
 // ****************************************************************************
@@ -1199,6 +1207,7 @@ func focusOn(fName string) {
 // SelectAll(p any)
 // ****************************************************************************
 func SelectAll(p any) {
+	ui.PleaseWait()
 	if len(sel) == 0 {
 		for idx := 1; idx < ui.TblFiles.GetRowCount(); idx++ {
 			if strings.TrimSpace(ui.TblFiles.GetCell(idx, 4).Text) == "FILE" {
@@ -1257,6 +1266,7 @@ func SelectAll(p any) {
 		RefreshMe()
 		displaySelection()
 	}
+	ui.JobsDone()
 }
 
 // ****************************************************************************

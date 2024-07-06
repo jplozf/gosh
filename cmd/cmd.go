@@ -22,11 +22,13 @@ import (
 	"gosh/pm"
 	"gosh/sq3"
 	"gosh/ui"
-	"path/filepath"
+	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/go-cmd/cmd"
+	"github.com/rivo/tview"
 )
 
 var (
@@ -80,7 +82,7 @@ func Xeq(c string) {
 		xCmd = xCmd[:5]
 		xCmd = strings.TrimSpace(xCmd)
 		switch xCmd {
-		case "!quit", "!exit":
+		case "!quit", "!exit", "!bye":
 			ui.PgsApp.SwitchToPage("dlgQuit")
 		case "!shel":
 			// SwitchToShell()
@@ -101,7 +103,8 @@ func Xeq(c string) {
 			// SwitchToHelp()
 			ui.AddNewScreen(ui.ModeHelp, help.SelfInit, nil)
 		case "!hex":
-			SwitchToHexEdit()
+			// SwitchToHexEdit()
+			ui.AddNewScreen(ui.ModeHexEdit, hexedit.SelfInit, nil)
 		default:
 			ui.SetStatus(fmt.Sprintf("Invalid command %s", sCmd[0]))
 		}
@@ -110,7 +113,7 @@ func Xeq(c string) {
 		case "cls":
 			ui.TxtConsole.SetText("")
 		default:
-			ui.SetStatus(fmt.Sprintf("Running [%s]", c))
+			ui.PleaseWait()
 			ui.HeaderConsole(c)
 
 			cmdOptions := cmd.Options{
@@ -119,6 +122,7 @@ func Xeq(c string) {
 			}
 
 			xCmd := cmd.NewCmdOptions(cmdOptions, sCmd[0], sCmd[1:]...)
+			xCmd.Dir = conf.Cwd
 			doneChan := make(chan struct{})
 			go func() {
 				defer close(doneChan)
@@ -131,28 +135,59 @@ func Xeq(c string) {
 							xCmd.Stdout = nil
 							continue
 						}
-						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + line + "\n")
+						ui.LblPID.SetText(fmt.Sprintf("PID=%d", xCmd.Status().PID))
+						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + tview.TranslateANSI(line) + "\n")
+						ui.App.ForceDraw()
 					case line, open := <-xCmd.Stderr:
 						if !open {
 							xCmd.Stderr = nil
 							continue
 						}
-						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + "[yellow]" + line + "[white]\n")
+						ui.LblPID.SetText(fmt.Sprintf("PID=%d", xCmd.Status().PID))
+						ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + "[yellow]" + tview.TranslateANSI(line) + "[white]\n")
+						ui.App.ForceDraw()
 					}
 				}
+				conf.Cwd = getWorkingDirectoryOfPID(xCmd.Status().PID)
 			}()
 
 			// Run and wait for Cmd to return
 			status := <-xCmd.Start()
-			ui.LblPID.SetText(fmt.Sprintf("PID=%d", status.PID))
 
 			// Wait for goroutine to print everything
 			<-doneChan
-			ui.LblRC.SetText(fmt.Sprintf("RC=%d", status.Exit))
 
+			// Job's done !
+			ui.TxtPath.SetText(conf.Cwd)
+			ui.TxtConsole.SetText(ui.TxtConsole.GetText(false) + "\n[yellow]" + fmt.Sprintf("Runtime for PID %d is %f seconds.", xCmd.Status().PID, xCmd.Status().Runtime) + "[white]\n")
+			rc := status.Exit
+			if rc != 0 {
+				ui.LblRC.SetText(fmt.Sprintf("[#FF0000]RC=%d", rc))
+			} else {
+				ui.LblRC.SetText(fmt.Sprintf("[#F5DEB3]RC=%d", rc))
+			}
+			ui.LblPID.SetText(fmt.Sprintf("%.2fs", xCmd.Status().Runtime))
+			ui.JobsDone()
 		}
 	}
 	ui.TxtPrompt.SetText("", false)
+}
+
+// ****************************************************************************
+// getWorkingDirectoryOfPID()
+// ****************************************************************************
+func getWorkingDirectoryOfPID(pid int) string {
+	cmd := exec.Command("lsof", "-a", "-d", "cwd", "-p", strconv.Itoa(pid))
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	if err != nil {
+		ui.SetStatus(err.Error())
+	} else {
+		ui.SetStatus(outb.String())
+	}
+	return outb.String()
 }
 
 /*
@@ -273,6 +308,7 @@ func SwitchToSQLite3() {
 }
 */
 
+/*
 // ****************************************************************************
 // SwitchToHexEdit()
 // ****************************************************************************
@@ -302,6 +338,7 @@ func SwitchToHexEdit() {
 		ui.App.SetFocus(ui.TxtPrompt)
 	}
 }
+*/
 
 /*
 // ****************************************************************************

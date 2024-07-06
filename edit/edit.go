@@ -73,6 +73,8 @@ func SwitchToEditor(fName string) {
 		screen.Keys = "Ctrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close"
 		ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxEditor, true, true)
 		scr = screen.Title + "_" + screen.ID
+		ui.ArrScreens = append(ui.ArrScreens, screen)
+		ui.IdxScreens++
 	}
 	ui.PgsApp.SwitchToPage(scr) // ???
 	OpenFile(fName)

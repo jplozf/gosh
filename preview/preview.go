@@ -21,6 +21,7 @@ import (
 	"gosh/utils"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/gabriel-vasile/mimetype"
 	_ "github.com/mattn/go-sqlite3"
@@ -126,6 +127,13 @@ func outZIP(fName string) string {
 // outDefault()
 // ****************************************************************************
 func outDefault(fName string) string {
+	return outExif(fName)
+}
+
+// ****************************************************************************
+// outExif()
+// ****************************************************************************
+func outExif(fName string) string {
 	args := []string{
 		fName,
 	}
@@ -133,7 +141,8 @@ func outDefault(fName string) string {
 	if err != nil {
 		return err.Error()
 	}
-	return string(out)
+	res := strings.Index(string(out), "\n") // Skip the first line which displays "Exif Tools version..."
+	return string(out)[res+1:]
 }
 
 // ****************************************************************************
@@ -164,4 +173,11 @@ func outSQLite3(fName string) string {
 		zTables += fmt.Sprintf("#%05d > %s\n", nTables, name)
 	}
 	return fmt.Sprintf("Total tables in SQLite3 database : %d\n", nTables) + zTables
+}
+
+// ****************************************************************************
+// DisplayExif()
+// ****************************************************************************
+func DisplayExif(fName string) {
+	ui.TxtFileInfo.SetText(outExif(fName))
 }
