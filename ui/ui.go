@@ -699,6 +699,23 @@ func ShowScreen(idx int) {
 	PgsApp.SwitchToPage(screen.Title + "_" + screen.ID)
 	IdxScreens = idx
 	LblScreen.SetText(fmt.Sprintf("%d/%d", IdxScreens+1, len(ArrScreens)))
+
+	switch CurrentMode {
+	case ModeShell:
+		App.SetFocus(TxtPrompt)
+	case ModeFiles:
+		App.SetFocus(TblFiles)
+	case ModeProcess:
+		App.SetFocus(TblProcess)
+	case ModeTextEdit:
+		App.SetFocus(EdtMain)
+	case ModeSQLite3:
+		App.SetFocus(TblSQLOutput)
+	case ModeHexEdit:
+		App.SetFocus(TblHexEdit)
+	case ModeHelp:
+		App.SetFocus(TxtHelp)
+	}
 }
 
 // ****************************************************************************
@@ -716,6 +733,7 @@ func AddNewScreen(mode Mode, selfInit FnAny, param any) {
 		screen.Title = "Files"
 		screen.Keys = "Del=Delete Ins=Select Ctrl+A=Select/Unselect All Ctrl+C=Copy Ctrl+X=Cut Ctrl+V=Paste Ctrl+S=Sort"
 		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxFiles, true, true)
+		App.SetFocus(TblFiles)
 	case ModeHexEdit:
 		screen.Title = "Hexedit"
 		screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"

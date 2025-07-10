@@ -493,8 +493,27 @@ func main() {
 
 	go ui.UpdateTime()
 	go utils.GetCpuUsage()
-	// FIXME : SetFocus on the correct ui.FlxXXX depending on the ui.MyConfig.StartupScreen
-	if err := ui.App.SetRoot(ui.PgsApp, true).SetFocus(ui.FlxShell).EnableMouse(true).Run(); err != nil {
+	var initialFocus tview.Primitive
+	switch ui.MyConfig.StartupScreen {
+	case ui.ModeFiles:
+		initialFocus = ui.TblFiles
+	case ui.ModeProcess:
+		initialFocus = ui.TblProcess
+	case ui.ModeTextEdit:
+		initialFocus = ui.EdtMain
+	case ui.ModeSQLite3:
+		initialFocus = ui.TblSQLOutput
+	case ui.ModeHexEdit:
+		initialFocus = ui.TblHexEdit
+	case ui.ModeHelp:
+		initialFocus = ui.TxtHelp
+	case ui.ModeShell:
+		initialFocus = ui.FlxShell
+	default:
+		initialFocus = ui.FlxShell
+	}
+
+	if err := ui.App.SetRoot(ui.PgsApp, true).SetFocus(initialFocus).EnableMouse(true).Run(); err != nil {
 		panic(err)
 	}
 }
