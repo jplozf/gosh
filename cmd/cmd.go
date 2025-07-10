@@ -35,7 +35,17 @@ var (
 	ACmd        []string
 	ICmd        int
 	CurrentUser string
+	currentCmd  *cmd.Cmd
 )
+
+// StopCurrentCommand stops the currently running command.
+func StopCurrentCommand() {
+	if currentCmd != nil {
+		currentCmd.Stop()
+		currentCmd = nil
+		ui.SetStatus("Command interrupted.")
+	}
+}
 
 type output struct {
 	buf   *bytes.Buffer
@@ -152,6 +162,7 @@ func Xeq(c string) {
 			}()
 
 			// Run and wait for Cmd to return
+			currentCmd = xCmd
 			status := <-xCmd.Start()
 
 			// Wait for goroutine to print everything

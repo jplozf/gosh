@@ -162,9 +162,13 @@ func main() {
 			}
 		case tcell.KeyEsc:
 			if ui.CurrentMode == ui.ModeShell {
-				ui.SetStatus("YO!")
+				cmd.StopCurrentCommand()
+			} else {
+				// Default behavior for Esc key when not in shell mode
+				ui.SetStatus("Escape key pressed")
 				ui.App.ForceDraw()
 			}
+			return nil
 		}
 		return event
 	})
