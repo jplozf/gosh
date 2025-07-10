@@ -693,7 +693,7 @@ func ShowNextScreen() {
 // ****************************************************************************
 func ShowScreen(idx int) {
 	var screen MyScreen = ArrScreens[idx]
-	SetTitle(screen.Title)
+	SetTitle(fmt.Sprintf("%s (%s)", screen.Title, screen.ID))
 	CurrentMode = screen.Mode
 	LblKeys.SetText(conf.FKEY_LABELS + "\n" + screen.Keys)
 	PgsApp.SwitchToPage(screen.Title + "_" + screen.ID)
