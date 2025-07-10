@@ -510,7 +510,7 @@ func ShowMainMenu() {
 		if i == ui.IdxScreens {
 			chk = true
 		}
-		MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%2d) %s-%s", i+1, ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), ui.ShowScreen, i, true, chk)
+		MnuMain.AddItem(ui.ArrScreens[i].ID, fmt.Sprintf("%2d) %s-%s", i+1, ui.ArrScreens[i].Title, ui.ArrScreens[i].ID), func(p any) { ui.ShowScreen(p.(int)) }, i, true, chk)
 	}
 	MnuMain.AddSeparator()
 	// Fixed options

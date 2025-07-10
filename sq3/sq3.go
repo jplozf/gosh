@@ -495,26 +495,9 @@ func DoExportCell(p any) {
 // SwitchToSQLite3()
 // ****************************************************************************
 func SwitchToSQLite3() {
-	ui.CurrentMode = ui.ModeSQLite3
-	ui.SetTitle("SQLite3")
-	ui.LblKeys.SetText("F1=Help F2=Shell F3=Files F4=Process F5=Refresh F6=Editor F8=Actions F12=Exit\nCtrl+O=Open Ctrl+S=Save")
-	ui.PgsApp.SwitchToPage(ui.GetCurrentScreen())
-	scr := ui.GetScreenFromTitle("SQLite3")
-	if scr == "NIL" {
-		// cmd.AddNewScreen(ui.ModeSQLite3, sq3.SelfInit(), nil)
-		var screen ui.MyScreen
-		screen.ID, _ = utils.RandomHex(3)
-		screen.Mode = ui.ModeSQLite3
-		screen.Title = "SQLite3"
-		screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
-		ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxSQL, true, true)
-		scr = screen.Title + "_" + screen.ID
-		ui.ArrScreens = append(ui.ArrScreens, screen)
-		ui.IdxScreens++
-	}
-	ui.PgsApp.SwitchToPage(scr) // ???
+	ui.AddNewScreen(ui.ModeSQLite3, nil, nil)
 	ui.App.SetFocus(ui.TxtPrompt)
-	ui.SetStatus(fmt.Sprintf("Switching to [%s]", scr))
+	ui.SetStatus("Switching to [SQLite3]")
 }
 
 // ****************************************************************************
@@ -531,22 +514,9 @@ func SelfInit(a any) {
 				// no, then open the targeted database
 				err := OpenDB(fName)
 				if err == nil {
-					ui.CurrentMode = ui.ModeSQLite3
-					ui.SetTitle("SQLite3")
-					ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save")
-					scr := ui.GetScreenFromTitle("SQLite3")
-					if scr == "NIL" {
-						var screen ui.MyScreen
-						screen.ID, _ = utils.RandomHex(3)
-						screen.Mode = ui.ModeSQLite3
-						screen.Title = "SQLite3"
-						screen.Keys = "Ctrl+O=Open Ctrl+S=Save"
-						ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxSQL, true, true)
-						scr = screen.Title + "_" + screen.ID
-					}
-					ui.PgsApp.SwitchToPage(scr) // ???
+					ui.AddNewScreen(ui.ModeSQLite3, nil, nil)
 					ui.App.SetFocus(ui.TxtPrompt)
-					ui.SetStatus(fmt.Sprintf("Switching to [%s]", scr))
+					ui.SetStatus(fmt.Sprintf("Switching to [SQLite3]"))
 				} else {
 					ui.CurrentMode = ui.ModeSQLite3
 					ui.SetTitle("SQLite3")

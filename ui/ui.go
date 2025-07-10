@@ -39,12 +39,10 @@ type Mode int
 type MyScreen struct {
 	ID    string
 	Title string
-	Page  *tview.Pages
 	Keys  string
 	Mode  Mode
 	Init  FnAny
 	Param any
-	Flex  *tview.Flex
 }
 
 type Config struct {
@@ -636,8 +634,7 @@ func PromptInput(msg string, choice string) {
 // RemoveScreen()
 // ****************************************************************************
 func RemoveScreen(s []MyScreen, i int) []MyScreen {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
+	return append(s[:i], s[i+1:]...)
 }
 
 // ****************************************************************************
@@ -648,27 +645,19 @@ func GetCurrentScreen() string {
 }
 
 // ****************************************************************************
-// GetScreenFromTitle()
-// ****************************************************************************
-func GetScreenFromTitle(t string) string {
-	for i := 0; i < len(ArrScreens); i++ {
-		if ArrScreens[i].Title == t {
-			return (ArrScreens[i].Title + "_" + ArrScreens[i].ID)
-		}
-	}
-	return "NIL"
-}
-
-// ****************************************************************************
 // CloseCurrentScreen()
 // ****************************************************************************
 func CloseCurrentScreen() {
+	PgsApp.RemovePage(ArrScreens[IdxScreens].Title + "_" + ArrScreens[IdxScreens].ID)
 	ArrScreens = RemoveScreen(ArrScreens, IdxScreens)
 	if len(ArrScreens) == 0 {
 		IdxScreens = -1
 		AddNewScreen(ModeShell, nil, nil)
 	} else {
-		ShowPreviousScreen()
+		if IdxScreens >= len(ArrScreens) {
+			IdxScreens = len(ArrScreens) - 1
+		}
+		ShowScreen(IdxScreens)
 	}
 	SetStatus("Closing current screen")
 }
@@ -702,13 +691,13 @@ func ShowNextScreen() {
 // ****************************************************************************
 // ShowScreen()
 // ****************************************************************************
-func ShowScreen(idx any) {
-	var screen MyScreen = ArrScreens[idx.(int)]
+func ShowScreen(idx int) {
+	var screen MyScreen = ArrScreens[idx]
 	SetTitle(screen.Title)
 	CurrentMode = screen.Mode
 	LblKeys.SetText(conf.FKEY_LABELS + "\n" + screen.Keys)
 	PgsApp.SwitchToPage(screen.Title + "_" + screen.ID)
-	IdxScreens = idx.(int)
+	IdxScreens = idx
 	LblScreen.SetText(fmt.Sprintf("%d/%d", IdxScreens+1, len(ArrScreens)))
 }
 
@@ -753,7 +742,7 @@ func AddNewScreen(mode Mode, selfInit FnAny, param any) {
 		PgsApp.AddPage(screen.Title+"_"+screen.ID, FlxHelp, true, true)
 	}
 	ArrScreens = append(ArrScreens, screen)
-	IdxScreens++
+	IdxScreens = len(ArrScreens) - 1 // Set IdxScreens to the newly added screen
 	ShowScreen(IdxScreens)
 	if selfInit != nil {
 		selfInit(param)

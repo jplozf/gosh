@@ -14,7 +14,7 @@ require (
 require (
 	github.com/atotto/clipboard v0.1.2 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
-	github.com/go-cmd/cmd v1.4.2 // indirect
+	github.com/go-cmd/cmd v1.4.2
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect

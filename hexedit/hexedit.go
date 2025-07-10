@@ -164,48 +164,15 @@ func SelfInit(a any) {
 		if CurrentHexFile == "" {
 			idx, _ := ui.TblFiles.GetSelection()
 			fName := filepath.Join(conf.Cwd, strings.TrimSpace(ui.TblFiles.GetCell(idx, 2).Text))
-			ui.CurrentMode = ui.ModeHexEdit
-			ui.SetTitle("HexEdit")
-			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
-			scr := ui.GetScreenFromTitle("HexEdit")
-			if scr == "NIL" {
-				var screen ui.MyScreen
-				screen.ID, _ = utils.RandomHex(3)
-				screen.Mode = ui.ModeHexEdit
-				screen.Title = "HexEdit"
-				screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"
-				ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxHexEdit, true, true)
-				scr = screen.Title + "_" + screen.ID
-				ui.ArrScreens = append(ui.ArrScreens, screen)
-				ui.IdxScreens++
-			}
-			ui.PgsApp.SwitchToPage(scr) // ???
+			ui.AddNewScreen(ui.ModeHexEdit, nil, nil)
 			OpenFile(fName)
 			ui.App.SetFocus(ui.TxtPrompt)
 		} else {
-			ui.CurrentMode = ui.ModeHexEdit
-			ui.SetTitle("HexEdit")
-			ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
-			ui.PgsApp.SwitchToPage("hexedit")
+			ui.AddNewScreen(ui.ModeHexEdit, nil, nil)
 			ui.App.SetFocus(ui.TxtPrompt)
 		}
 	} else {
-		ui.CurrentMode = ui.ModeHexEdit
-		ui.SetTitle("HexEdit")
-		ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go")
-		scr := ui.GetScreenFromTitle("HexEdit")
-		if scr == "NIL" {
-			var screen ui.MyScreen
-			screen.ID, _ = utils.RandomHex(3)
-			screen.Mode = ui.ModeHexEdit
-			screen.Title = "HexEdit"
-			screen.Keys = "Ctrl+O=Open Ctrl+S=Save Ctrl+F=Find Ctrl+G=Go"
-			ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxHexEdit, true, true)
-			scr = screen.Title + "_" + screen.ID
-			ui.ArrScreens = append(ui.ArrScreens, screen)
-			ui.IdxScreens++
-		}
-		ui.PgsApp.SwitchToPage(scr) // ???
+		ui.AddNewScreen(ui.ModeHexEdit, nil, nil)
 		ui.App.SetFocus(ui.TxtPrompt)
 	}
 }

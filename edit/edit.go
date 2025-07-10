@@ -61,22 +61,7 @@ var (
 // SwitchToEditor()
 // ****************************************************************************
 func SwitchToEditor(fName string) {
-	ui.CurrentMode = ui.ModeTextEdit
-	ui.SetTitle("Editor")
-	ui.LblKeys.SetText(conf.FKEY_LABELS + "\nCtrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close")
-	scr := ui.GetScreenFromTitle("Editor")
-	if scr == "NIL" {
-		var screen ui.MyScreen
-		screen.ID, _ = utils.RandomHex(3)
-		screen.Mode = ui.ModeTextEdit
-		screen.Title = "Editor"
-		screen.Keys = "Ctrl+S=Save Alt+S=Save as… Ctrl+N=New Ctrl+T=Close"
-		ui.PgsApp.AddPage(screen.Title+"_"+screen.ID, ui.FlxEditor, true, true)
-		scr = screen.Title + "_" + screen.ID
-		ui.ArrScreens = append(ui.ArrScreens, screen)
-		ui.IdxScreens++
-	}
-	ui.PgsApp.SwitchToPage(scr) // ???
+	ui.AddNewScreen(ui.ModeTextEdit, nil, nil)
 	OpenFile(fName)
 	ShowTreeDir(filepath.Dir(fName))
 	ui.App.SetFocus(ui.EdtMain)
