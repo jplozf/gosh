@@ -36,7 +36,7 @@ const (
 	LABEL_PARENT_FOLDER     = "<UP>"
 	FILE_LOG                = "gosh.log"
 	FILE_CONFIG             = "gosh.json"
-	FKEY_LABELS             = "F1=Help F2=Prompt F3=Close F5=Refresh F6=Previous F7=Next F8=Context Menu F10=Main Menu F12=Exit"
+	FKEY_LABELS             = "F1=Help F2=Prompt F3=Close F4=Stop Cmd F5=Refresh F6=Previous F7=Next F8=Context Menu F10=Main Menu F12=Exit"
 )
 
 var Cwd string

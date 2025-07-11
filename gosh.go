@@ -132,20 +132,27 @@ func main() {
 		switch event.Key() {
 		case tcell.KeyF1:
 			ui.AddNewScreen(ui.ModeHelp, help.SelfInit, nil)
+			return nil // Consume the event
 		case tcell.KeyF2:
 			ui.App.SetFocus(ui.TxtPrompt)
+			return nil // Consume the event
 		case tcell.KeyF3:
 			ui.CloseCurrentScreen()
+			return nil // Consume the event
 		case tcell.KeyF6:
 			ui.ShowPreviousScreen()
+			return nil // Consume the event
 		case tcell.KeyF7:
 			ui.ShowNextScreen()
+			return nil // Consume the event
 		case tcell.KeyF10:
 			ShowMainMenu()
+			return nil // Consume the event
 		case tcell.KeyF12:
 			ShowQuitDialog(nil)
+			return nil // Consume the event
 		case tcell.KeyCtrlC:
-			return nil
+			return nil // Consume the event (standard Ctrl+C behavior)
 		case tcell.KeyCtrlO:
 			if ui.CurrentMode == ui.ModeSQLite3 {
 				sq3.DoOpenDB(conf.Cwd)
@@ -153,6 +160,7 @@ func main() {
 			if ui.CurrentMode == ui.ModeHexEdit {
 				hexedit.DoOpen(conf.Cwd)
 			}
+			return nil // Consume the event
 		case tcell.KeyCtrlS:
 			if ui.CurrentMode == ui.ModeSQLite3 {
 				sq3.DoCloseDB()
@@ -160,17 +168,18 @@ func main() {
 			if ui.CurrentMode == ui.ModeHexEdit {
 				hexedit.Close()
 			}
-		case tcell.KeyEsc:
+			return nil // Consume the event
+		case tcell.KeyF4:
 			if ui.CurrentMode == ui.ModeShell {
 				cmd.StopCurrentCommand()
 			} else {
 				// Default behavior for Esc key when not in shell mode
-				ui.SetStatus("Escape key pressed")
+				ui.SetStatus("F4 key pressed (not in shell mode)")
 				ui.App.ForceDraw()
 			}
 			return nil
 		}
-		return event
+		return event // Pass on other events
 	})
 
 	// Files panel keyboard's events manager
@@ -676,7 +685,8 @@ func saveSettings() {
 // ****************************************************************************
 func welcome() {
 	w1 := ":: Welcome to " + conf.APP_STRING + " :"
-	w2 := conf.APP_NAME + " version " + conf.APP_VERSION + " - " + conf.APP_URL + "\n"
+	w2 := conf.APP_NAME + " version " + Version + " - " + conf.APP_URL + "\n"
+
 	os := runtime.GOOS
 	if os == "windows" {
 		out, err := exec.Command("ver").Output()

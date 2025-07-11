@@ -643,7 +643,7 @@ func DoPaste(p any) {
 			}
 			sel = nil
 			RefreshMe()
-			ui.JobsDone()
+			                ui.JobsDone()
 			focusOn(fName)
 		}
 		if pasteMode == PASTE_CUT {
@@ -672,7 +672,7 @@ func DoPaste(p any) {
 			}
 			sel = nil
 			RefreshMe()
-			ui.JobsDone()
+			                ui.JobsDone()
 			focusOn(fName)
 		}
 	}
@@ -1048,7 +1048,7 @@ func ProceedFileAction() {
 		ui.App.SetFocus(ui.TblFiles)
 	}
 	// ui.App.Sync()
-	ui.JobsDone()
+	                ui.JobsDone()
 }
 
 // ****************************************************************************
@@ -1116,7 +1116,7 @@ func ProceedFileSelect() {
 			ui.TblFiles.Select(idx+1, 0)
 		}
 	}
-	ui.JobsDone()
+	                ui.JobsDone()
 }
 
 // ****************************************************************************
@@ -1266,7 +1266,7 @@ func SelectAll(p any) {
 		RefreshMe()
 		displaySelection()
 	}
-	ui.JobsDone()
+	                ui.JobsDone()
 }
 
 // ****************************************************************************
